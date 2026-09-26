@@ -1,0 +1,31 @@
+# Netlify 镜像：页面由 Netlify 发出，/api/* 由 Netlify 服务器转发给 Beam 后端，
+# 浏览器只连 netlify.app，不直连 beam.cloud。前端按同域调用接口（不设 VITE_API_BASE）。
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VITE_API_BASE = ""
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://oraculum-879d00e.app.beam.cloud/api/:splat"
+  status = 200
+  force = true
+
+# 单页应用：未知路径回到首页
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"

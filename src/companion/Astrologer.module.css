@@ -1,0 +1,107 @@
+/* 占星师。面板和气泡是全站同一种夜色玻璃（.glass），这里只管布局与细节。 */
+
+.root { position: fixed; z-index: 950; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; pointer-events: none; font-family: var(--sans); color: var(--ink); }
+.root > * { pointer-events: auto; }
+.root * { box-sizing: border-box; }
+.root button { font: inherit; color: inherit; cursor: pointer; }
+.root button:focus-visible, .root a:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.root textarea:focus-visible { outline: none; }
+
+/* ---------- 形象 ---------- */
+.figure { position: relative; touch-action: none; cursor: grab; animation: rise 640ms cubic-bezier(.16, 1, .3, 1) both; }
+.figure:active { cursor: grabbing; }
+.figure canvas { filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .55)) drop-shadow(0 0 22px rgba(185, 166, 255, .16)); }
+/* 走路：一颠一摆，以脚底为轴 */
+.figure[data-walking] canvas { transform-origin: 50% 100%; animation: waddle 520ms ease-in-out infinite; }
+@keyframes waddle { 0%, 100% { transform: translateY(0) rotate(-2.5deg); } 25% { transform: translateY(-5px) rotate(0); } 50% { transform: translateY(0) rotate(2.5deg); } 75% { transform: translateY(-5px) rotate(0); } }
+.hit { position: absolute; left: 18%; right: 18%; top: 6%; bottom: 0; border: 0; background: none; border-radius: 40% 40% 24% 24%; -webkit-tap-highlight-color: transparent; }
+.placeholder { position: absolute; left: 50%; bottom: 10px; translate: -50% 0; display: grid; place-items: center; min-width: 64px; height: 30px; padding: 0 14px; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--gold); pointer-events: none; }
+.collapse { position: absolute; top: 8%; right: 8%; width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line2); border-radius: 50%; background: rgba(20, 16, 36, .8); color: var(--ink2); opacity: 0; scale: .9; transition: opacity 220ms, scale 220ms cubic-bezier(.16, 1, .3, 1); }
+.collapse svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+.figure:hover .collapse, .figure:focus-within .collapse { opacity: 1; scale: 1; }
+@media (hover: none) { .collapse { opacity: .9; scale: 1; } }
+.alertDot { position: absolute; top: 14%; left: 22%; width: 10px; height: 10px; border-radius: 50%; background: var(--rose); box-shadow: 0 0 0 3px rgba(20, 16, 36, .9); animation: ping 1.8s ease-out infinite; }
+
+/* ---------- 收起后的小胶囊 ---------- */
+.chip { height: 38px; padding: 0 16px 0 12px !important; font-size: 13px !important; animation: rise 380ms cubic-bezier(.16, 1, .3, 1) both; }
+.chipDot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 3px rgba(233, 203, 139, .16); }
+.chipDot[data-alert] { background: var(--rose); box-shadow: 0 0 0 3px rgba(255, 156, 143, .16); animation: ping 1.8s ease-out infinite; }
+
+/* ---------- 对话气泡 ---------- */
+.bubble { max-width: min(280px, 78vw); padding: 12px 14px; border-radius: 18px 18px 6px 18px; font-size: 13px; line-height: 1.65; transform-origin: 100% 100%; animation: pop 380ms cubic-bezier(.16, 1, .3, 1) both; }
+.bubble p { margin: 0; }
+/* 长回复在气泡里滚动（滑动阅读），下面的页面不动 */
+.bubbleText { max-height: min(38svh, 240px); overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; scrollbar-width: thin; -webkit-mask-image: linear-gradient(#000 calc(100% - 10px), #0000); mask-image: linear-gradient(#000 calc(100% - 10px), #0000); padding-bottom: 6px; }
+.bubble > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.bubble > div button { height: 28px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 99px; background: rgba(255, 255, 255, .04); font-size: 12px !important; transition: background 160ms; }
+.bubble > div button:hover { background: rgba(255, 255, 255, .1); }
+.bubble > div button:first-child { border-color: rgba(233, 203, 139, .5); background: linear-gradient(150deg, rgba(246, 222, 166, .4), rgba(184, 145, 74, .22)); color: #fff9ea !important; }
+
+/* ---------- 对话面板 ---------- */
+.panel { display: flex; flex-direction: column; width: min(356px, calc(100vw - 24px)); height: min(540px, calc(100svh - 150px)); border-radius: 22px; overflow: hidden; overscroll-behavior: contain; transform-origin: 100% 100%; animation: pop 380ms cubic-bezier(.16, 1, .3, 1) both; }
+.panelHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 14px 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sigil { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--gold); font-size: 14px; background: radial-gradient(circle at 35% 30%, rgba(255, 246, 225, .28), rgba(185, 166, 255, .1) 60%, transparent); box-shadow: inset 0 1px 1px rgba(255, 249, 232, .4), 0 0 16px rgba(233, 203, 139, .15); }
+.panelHead strong { display: block; font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: .08em; }
+.panelHead span:not(.sigil) { display: block; margin-top: 2px; font-size: 10.5px; letter-spacing: .06em; color: var(--ink3); }
+.headActions { display: flex; align-items: center; gap: 6px; }
+.headActions button { height: 28px; min-width: 28px; padding: 0 10px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 99px; background: transparent; font-size: 12px !important; color: var(--ink2); }
+.headActions button:disabled { opacity: .4; cursor: default; }
+.headActions svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+.log { flex: 1; min-height: 65px; display: flex; flex-direction: column; gap: 8px; padding: 16px 14px; }
+.log p { margin: 0; max-width: 86%; padding: 9px 13px; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; animation: enter 320ms cubic-bezier(.16, 1, .3, 1) both; }
+.her { align-self: flex-start; border-radius: 16px 16px 16px 6px; background: rgba(255, 255, 255, .07); box-shadow: inset 0 1px 0 rgba(255, 249, 232, .1); font-family: var(--serif); }
+.me { align-self: flex-end; border-radius: 16px 16px 6px 16px; background: linear-gradient(150deg, rgba(233, 203, 139, .32), rgba(184, 145, 74, .2)); color: #fff9ea; box-shadow: inset 0 1px 0 rgba(255, 246, 220, .35); }
+.system { align-self: flex-start; border: 1px dashed var(--line2); border-radius: 12px; color: var(--ink2); font-size: 12.5px !important; }
+.empty { align-self: center !important; max-width: 90% !important; text-align: center; color: var(--ink3); font-size: 12.5px !important; background: none; }
+.typing { align-self: flex-start; display: inline-flex; align-items: center; padding: 11px 14px !important; border-radius: 16px 16px 16px 6px; background: rgba(255, 255, 255, .07); color: var(--gold); }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; max-height: 70px; overflow: auto; flex-shrink: 0; }
+.suggest button { padding: 6px 11px; border: 1px solid var(--line); border-radius: 99px; background: rgba(255, 255, 255, .04); font-size: 12px !important; color: var(--ink2); text-align: left; transition: background 160ms, color 160ms; }
+.suggest button:hover { background: rgba(255, 255, 255, .09); color: var(--ink); }
+.form { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); flex-shrink: 0; }
+.form textarea { flex: 1; min-width: 0; min-height: 38px; max-height: 120px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(6, 4, 16, .5); color: var(--ink); font: inherit; font-size: 13.5px; line-height: 1.45; resize: none; field-sizing: content; outline: none; }
+.form textarea:focus { border-color: rgba(233, 203, 139, .45); }
+.form textarea::placeholder { color: var(--ink3); }
+.form button { height: 38px; padding: 0 16px !important; }
+.credit { padding: 8px 16px 12px; font-size: 10px; line-height: 1.6; letter-spacing: .02em; color: var(--ink3); flex-shrink: 0; }
+.credit a { color: inherit; text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 2px; }
+
+/* 面板底部：她会读页面的说明 + 折叠的图片托盘 */
+.vision { flex-shrink: 0; border-top: 1px solid var(--line); background: rgba(255, 255, 255, .025); max-height: 210px; overflow: auto; }
+.vision details > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 14px; list-style: none; cursor: pointer; user-select: none; }
+.vision details > summary::-webkit-details-marker { display: none; }
+.notice { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 10.5px; letter-spacing: .02em; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notice::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lilac); box-shadow: 0 0 0 2px rgba(185, 166, 255, .16); }
+.tray { display: inline-flex; align-items: center; gap: 4px; flex: none; font-size: 11px; color: var(--ink2); }
+.tray svg { width: 10px; height: 10px; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; fill: none; transition: rotate 220ms cubic-bezier(.16, 1, .3, 1); }
+.vision details[open] .tray svg { rotate: 180deg; }
+.vision details > :not(summary) { margin-left: 14px; margin-right: 14px; }
+.vision details > :last-child { margin-bottom: 10px; }
+.vision p { font-size: 10px; line-height: 1.5; color: var(--ink3); margin: 0 14px 6px; }
+.visionActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.vision button { border: 1px solid var(--line); border-radius: 99px; background: rgba(255, 255, 255, .05); padding: 5px 10px; font-size: 11px !important; }
+.vision button:disabled { opacity: .4; cursor: default; }
+.screenPreview { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.screenPreview span { display: flex; align-items: center; gap: 8px; }
+.screenPreview img { max-width: 110px; height: 58px; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); }
+
+/* 危险操作的确认卡 */
+.confirm { align-self: stretch; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid rgba(255, 156, 143, .35); border-radius: 12px; background: rgba(255, 156, 143, .07); font-size: 12.5px; line-height: 1.55; animation: enter 320ms cubic-bezier(.16, 1, .3, 1) both; }
+.confirm div { display: flex; flex-wrap: wrap; gap: 6px; }
+.confirm button { height: 28px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 99px; background: rgba(255, 255, 255, .05); font-size: 12px !important; }
+.confirm button:first-child { border-color: transparent; background: var(--ink); color: var(--bg) !important; }
+
+[data-compact] .panel { height: min(480px, calc(100svh - 120px)); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+@keyframes enter { from { opacity: 0; transform: translateY(6px); } }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(255, 156, 143, .4); } 70%, 100% { box-shadow: 0 0 0 9px rgba(255, 156, 143, 0); } }
+@keyframes fade { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .figure, .chip, .bubble, .panel, .log p { animation: fade 160ms linear both; }
+  .alertDot, .chipDot[data-alert] { animation: none; }
+  .collapse, .tray svg { transition: none; }
+  .figure[data-walking] canvas { animation: none; }
+}

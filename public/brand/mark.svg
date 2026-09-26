@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" color="#e9cb8b">
+  <title>ORACULUM</title>
+  <path d="M18 58V24a14 14 0 0 1 28 0v34Z" fill="currentColor" fill-opacity=".07" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M25 54.5h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".7"/>
+  <path d="M32.00 21.50L35.30 29.00L32.00 36.50L28.70 29.00Z" fill="currentColor" opacity="1"/><path d="M44.00 36.50L38.00 39.50L32.00 36.50L38.00 33.50Z" fill="currentColor" opacity="0.64"/><path d="M32.00 36.50L35.30 44.00L32.00 51.50L28.70 44.00Z" fill="currentColor" opacity="0.36"/><path d="M32.00 36.50L26.00 39.50L20.00 36.50L26.00 33.50Z" fill="currentColor" opacity="0.64"/>
+</svg>

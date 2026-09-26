@@ -1,0 +1,21 @@
+node_modules
+dist
+.DS_Store
+*.log
+.vite
+.ai-config.json
+_backup_*
+.beam-tools/
+backend/beam/static/
+backend/beam/__pycache__/
+.edgeone/
+
+# Tencent Cloud EdgeOne
+.env
+.edgeone/*
+.tef_dist/*
+  
+# Local Netlify folder
+.netlify
+desktop/stage/
+desktop/out/
