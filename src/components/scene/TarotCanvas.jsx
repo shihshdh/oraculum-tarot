@@ -80,11 +80,11 @@ function CameraRig({ reduced }) {
 function Studio() {
   return (
     <Environment resolution={DESKTOP ? 1024 : 256} frames={1}>
-      <color attach="background" args={['#0b0820']} />
+      <color attach="background" args={['#0d0a12']} />
       <Lightformer form="rect" intensity={3.2} color="#ffe2b0" position={[-4, 4, 3]} scale={[6, 3, 1]} target={[0, 0, 0]} />
-      <Lightformer form="rect" intensity={1.6} color="#b9a6ff" position={[5, -1, 2]} scale={[3, 6, 1]} target={[0, 0, 0]} />
+      <Lightformer form="rect" intensity={1.3} color="#d9d0ee" position={[5, -1, 2]} scale={[3, 6, 1]} target={[0, 0, 0]} />
       <Lightformer form="ring" intensity={2.4} color="#fff3d6" position={[0, 2, 6]} scale={3} target={[0, 0, 0]} />
-      <Lightformer form="rect" intensity={0.8} color="#6b5cff" position={[0, -5, -2]} scale={[10, 2, 1]} target={[0, 0, 0]} />
+      <Lightformer form="rect" intensity={0.8} color="#5a4a33" position={[0, -5, -2]} scale={[10, 2, 1]} target={[0, 0, 0]} />
     </Environment>
   );
 }
@@ -153,7 +153,7 @@ export default function TarotCanvas() {
         {DESKTOP && (
           <>
             {/* 近处一层更大、更慢的冷色光尘，拉出纵深 */}
-            <Sparkles count={quality === 'high' ? 90 : 40} scale={[14, 7, 3]} position={[0, -0.5, 1.2]} size={5} speed={reduced ? 0 : 0.12} opacity={0.35} color="#c9bcff" noise={1.2} />
+            <Sparkles count={quality === 'high' ? 90 : 40} scale={[14, 7, 3]} position={[0, -0.5, 1.2]} size={5} speed={reduced ? 0 : 0.12} opacity={0.35} color="#efe2c4" noise={1.2} />
             <Suspense fallback={null}>
               <FlowLight />
             </Suspense>
@@ -162,7 +162,7 @@ export default function TarotCanvas() {
 
         <ambientLight intensity={0.35} />
         <directionalLight position={[-3, 4, 6]} intensity={1.6} color="#ffe9c7" />
-        <pointLight position={[3, -2, 4]} intensity={6} distance={14} color="#b9a6ff" />
+        <pointLight position={[3, -2, 4]} intensity={4} distance={14} color="#d6ccef" />
 
         <Suspense fallback={null}>
           <Studio />

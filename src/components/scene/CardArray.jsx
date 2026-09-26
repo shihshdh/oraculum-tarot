@@ -7,12 +7,16 @@ import { emitCompanion } from '../../lib/companionBus';
 import FloatingCard from './FloatingCard';
 import SlotCard from './SlotCard';
 import FlyingCard from './FlyingCard';
+import ParticleBurst from './ParticleBurst';
 
 /**
  * 漂浮牌河 + 下方五个卡位
  *   1. 牌河循环漂浮；光标悬停的那张减速、抬起、烫金发光
  *   2. 捏合/点击 → 那张牌沿弧线飞进下一个空卡位（背面朝上）
  *   3. 五张到齐后依次翻开
+ *   4. 洗牌：选牌时快速左右晃动指针或手（1 秒内来回 4 次以上），牌河旋转着重新洗一遍
+ *   5. 磁性：指针靠近时，附近的牌微微抬起、朝指针倾斜（指针在牌河平面上的位置写进 cursorWorld）
+ *   6. 端详：翻牌后点一张牌，它浮到眼前；再点一下放回
  *
  * 性能：悬停检测每帧只做一次射线检测（对所有命中盒），只在悬停对象变化时写 store；
  * 捏合通过 store.subscribe 监听，不引起本组件重渲染。
@@ -22,6 +26,16 @@ export const RIVER_Y = 1.3;
 const RIVER_SPEED = 0.4;
 const RIVER_SPACING = 1.2;
 export const SLOT_Y = -1.5;
+export const SHUFFLE_MS = 700; // 洗牌动画时长：一半时牌几乎看不见，就在那一刻换顺序
+
+function shuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 export const SLOT_SPACING = 1.3;
 const FLY_DURATION = 850;
 const STICKY_MS = 180;
@@ -34,7 +48,10 @@ export default function CardArray() {
   const { camera } = useThree();
 
   const offsetRef = useRef(0);
-  const riverDeck = useMemo(() => TAROT_DECK.filter((t) => !pickedTarotIds.includes(t.id)), [pickedTarotIds]);
+  const [order, setOrder] = useState(() => TAROT_DECK);
+  const riverDeck = useMemo(() => order.filter((t) => !pickedTarotIds.includes(t.id)), [order, pickedTarotIds]);
+  const cursorWorld = useRef(new THREE.Vector3(0, -99, 0)); // 指针在牌河平面 z = 0 上的位置（磁性用）
+  const [bursts, setBursts] = useState([]);
   const slotPositions = useMemo(() => cards.map((_, i) => [(i - 2) * SLOT_SPACING, SLOT_Y, 0]), [cards.length]);
 
   // 命中盒登记表
@@ -42,6 +59,27 @@ export default function CardArray() {
   const register = useCallback((mesh) => {
     hits.current.add(mesh);
     return () => hits.current.delete(mesh);
+  }, []);
+  // 卡位的命中盒（端详用）
+  const slotHits = useRef(new Set());
+  const registerSlot = useCallback((mesh) => {
+    slotHits.current.add(mesh);
+    return () => slotHits.current.delete(mesh);
+  }, []);
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
+
+  // ---------- 洗牌 ----------
+  const shake = useRef({ lastX: null, lastT: 0, dir: 0, flips: [], cooldown: 0 });
+  const shuffle = useCallback(() => {
+    const s = useTarotStore.getState();
+    s.markShuffled(); // FloatingCard 据此做旋转淡出 → 淡入
+    s.setHoveredRiverId(null);
+    speed.current = RIVER_SPEED * 12; // 牌河猛地一转，再慢慢停下来
+    const id = Date.now();
+    setBursts((b) => [...b, id]);
+    setTimeout(() => setBursts((b) => b.filter((x) => x !== id)), 2800);
+    setTimeout(() => setOrder((o) => shuffled(o)), SHUFFLE_MS / 2);
+    emitCompanion({ type: 'moment', kind: 'shuffled' });
   }, []);
 
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -51,6 +89,18 @@ export default function CardArray() {
 
   useFrame((_, dt) => {
     const s = useTarotStore.getState();
+    // 端详：翻牌后，指针下是哪张牌（牌河此时已经收起，下面的逻辑都不用跑）
+    if (s.phase === 'done' && !s.isMirror) {
+      let slot = null;
+      if (s.cursor.visible && s.inspectSlot === null) {
+        ndc.set(s.cursor.x * 2 - 1, -(s.cursor.y * 2 - 1));
+        raycaster.setFromCamera(ndc, camera);
+        for (const hit of raycaster.intersectObjects([...slotHits.current], false)) { slot = hit.object.userData.slotId; break; }
+      }
+      if (slot !== s.hoveredSlot) s.setHoveredSlot(slot);
+      if (s.hoveredRiverId) s.setHoveredRiverId(null);
+      return;
+    }
     if (s.phase !== 'selecting' && s.phase !== 'revealing') return;
 
     // 牌河速度平滑过渡：悬停几乎停下，加速时 3.5 倍
@@ -61,10 +111,43 @@ export default function CardArray() {
     if (total > 0) offsetRef.current %= total;
 
     if (s.isMirror) return; // 副屏的悬停由主屏广播过来
-    let id = null;
+    const now0 = performance.now();
+
+    // 洗牌检测：指针横向速度超过每秒 1.6 个屏宽、方向来回翻转，0.9 秒内 4 次
+    const sh = shake.current;
     if (s.phase === 'selecting' && s.cursor.visible) {
+      if (sh.lastX !== null) {
+        const dtm = (now0 - sh.lastT) / 1000;
+        const v = dtm > 0 ? (s.cursor.x - sh.lastX) / dtm : 0;
+        if (Math.abs(v) > 1.6) {
+          const d = Math.sign(v);
+          if (sh.dir && d !== sh.dir) sh.flips.push(now0);
+          sh.dir = d;
+        }
+      }
+      sh.lastX = s.cursor.x;
+      sh.lastT = now0;
+      sh.flips = sh.flips.filter((t) => now0 - t < 900);
+      if (sh.flips.length >= 4 && now0 > sh.cooldown) {
+        sh.flips = [];
+        sh.dir = 0;
+        sh.cooldown = now0 + 2500;
+        shuffle();
+      }
+    } else {
+      sh.lastX = null;
+    }
+
+    if (s.cursor.visible) {
       ndc.set(s.cursor.x * 2 - 1, -(s.cursor.y * 2 - 1));
       raycaster.setFromCamera(ndc, camera);
+      if (!raycaster.ray.intersectPlane(plane, cursorWorld.current)) cursorWorld.current.set(0, -99, 0);
+    } else {
+      cursorWorld.current.set(0, -99, 0);
+    }
+
+    let id = null;
+    if (s.phase === 'selecting' && s.cursor.visible && Date.now() - s.shuffledAt > SHUFFLE_MS) {
       const list = [...hits.current];
       for (const hit of raycaster.intersectObjects(list, false)) {
         const hitId = hit.object.userData.tarotId;
@@ -88,6 +171,15 @@ export default function CardArray() {
       (pinching) => {
         if (!pinching) return;
         const s = useTarotStore.getState();
+        // 翻牌后：点牌 = 端详它；端详时再点一下（任何地方）= 放回去
+        if (s.phase === 'done') {
+          if (s.inspectSlot !== null) s.setInspectSlot(null);
+          else if (s.hoveredSlot !== null) {
+            s.setInspectSlot(s.hoveredSlot);
+            emitCompanion({ type: 'moment', kind: 'inspect', slot: s.hoveredSlot });
+          }
+          return;
+        }
         if (s.phase !== 'selecting' || !s.hoveredRiverId) return;
         const slot = s.cards.find((c) => !c.tarotId && !reserved.current.has(c.slotId));
         const tarot = TAROT_DECK.find((t) => t.id === s.hoveredRiverId);
@@ -120,6 +212,13 @@ export default function CardArray() {
     );
   }, [isMirror]);
 
+  // Esc 放回正在端详的牌
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && useTarotStore.getState().inspectSlot !== null) useTarotStore.getState().setInspectSlot(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     if (phase === 'splash') {
       setFlying([]);
@@ -133,13 +232,18 @@ export default function CardArray() {
     <>
       {showRiver &&
         riverDeck.map((tarot, i) => (
-          <FloatingCard key={tarot.id} tarot={tarot} baseIndex={i} totalCount={riverDeck.length} spacing={RIVER_SPACING} yPosition={RIVER_Y} offsetRef={offsetRef} register={register} />
+          <FloatingCard key={tarot.id} tarot={tarot} baseIndex={i} totalCount={riverDeck.length} spacing={RIVER_SPACING} yPosition={RIVER_Y} offsetRef={offsetRef} register={register} cursorWorld={cursorWorld} />
         ))}
       {flying.map((f) => (
         <FlyingCard key={f.id} startY={RIVER_Y} targetPos={f.target} startedAt={f.startedAt} duration={FLY_DURATION} />
       ))}
       {cards.map((card, i) => (
-        <SlotCard key={card.slotId} slotId={card.slotId} position={slotPositions[i]} flipped={card.flipped} reversed={card.reversed} tarotId={card.tarotId} />
+        <SlotCard key={card.slotId} slotId={card.slotId} position={slotPositions[i]} flipped={card.flipped} reversed={card.reversed} tarotId={card.tarotId} registerSlot={registerSlot} />
+      ))}
+      {bursts.map((id) => (
+        <group key={id} position={[0, RIVER_Y, 0.6]} scale={[3.2, 1.2, 1]}>
+          <ParticleBurst />
+        </group>
       ))}
     </>
   );

@@ -5,7 +5,7 @@
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
   "orientation": "portrait",
-  "background_color": "#07060f",
-  "theme_color": "#07060f",
+  "background_color": "#080706",
+  "theme_color": "#080706",
   "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

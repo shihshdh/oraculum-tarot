@@ -90,7 +90,7 @@ function createWindow(url = ORIGIN + '/', opts = {}) {
     minWidth: 960,
     minHeight: 600,
     show: false,
-    backgroundColor: '#07060f', // 与页面同色：开场动画前不会闪白
+    backgroundColor: '#080706', // 与页面同色：开场动画前不会闪白
     title: 'ORACULUM · 命运的抉择',
     icon: path.join(__dirname, 'icon.ico'),
     autoHideMenuBar: true,
@@ -116,7 +116,7 @@ function createWindow(url = ORIGIN + '/', opts = {}) {
   // 副屏（?role=mirror）在客户端里开成新窗口；其他外链交给系统浏览器
   win.webContents.setWindowOpenHandler(({ url: target }) => {
     if (target.startsWith(ORIGIN)) {
-      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 800, backgroundColor: '#07060f', autoHideMenuBar: true, icon: path.join(__dirname, 'icon.ico') } };
+      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 800, backgroundColor: '#080706', autoHideMenuBar: true, icon: path.join(__dirname, 'icon.ico') } };
     }
     if (/^https?:/i.test(target)) shell.openExternal(target);
     return { action: 'deny' };

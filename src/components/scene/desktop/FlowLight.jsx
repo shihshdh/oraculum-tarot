@@ -10,9 +10,9 @@ import { useTarotStore } from '../../../store/useTarotStore';
  */
 const RIBBONS = [
   { rx: 4.6, ry: 1.35, tilt: 0.22, roll: 0.05, z: -0.4, speed: 0.07, heads: 3, color: '#ffd89a', width: 0.011 },
-  { rx: 5.3, ry: 1.9, tilt: -0.35, roll: -0.08, z: -0.9, speed: -0.05, heads: 2, color: '#b9a6ff', width: 0.009 },
+  { rx: 5.3, ry: 1.9, tilt: -0.35, roll: -0.08, z: -0.9, speed: -0.05, heads: 2, color: '#d6ccef', width: 0.009 },
   { rx: 3.9, ry: 0.9, tilt: 0.55, roll: 0.12, z: -0.2, speed: 0.1, heads: 2, color: '#fff1d0', width: 0.007 },
-  { rx: 6.2, ry: 2.6, tilt: 0.1, roll: -0.2, z: -1.4, speed: 0.035, heads: 4, color: '#8fd6ff', width: 0.008 },
+  { rx: 6.2, ry: 2.6, tilt: 0.1, roll: -0.2, z: -1.4, speed: 0.035, heads: 4, color: '#f3e3bf', width: 0.008 },
 ];
 
 const vert = /* glsl */ `

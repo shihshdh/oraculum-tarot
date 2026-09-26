@@ -246,7 +246,7 @@ export default function BrandIntro({ onSceneStart }) {
       </div>
       <style>{`
         .brand-intro { position: fixed; inset: 0; z-index: 2000; cursor: pointer; }
-        .brand-intro-backdrop { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 50% 45%, #171034 0%, #0a0818 55%, #040309 100%); }
+        .brand-intro-backdrop { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 50% 45%, #18121f 0%, #0a080d 55%, #040305 100%); }
         .brand-intro-glass { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
         .brand-intro-center { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
         .brand-intro-lockup { display: flex; align-items: center; gap: clamp(18px, 3vw, 34px); }

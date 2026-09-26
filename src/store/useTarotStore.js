@@ -96,6 +96,11 @@ export const useTarotStore = create(
       introDone: false,
       // 客户端光追（路径追踪）进度：off | building | compiling | tracing | done；samples = 已累积的采样数
       rayTrace: { status: 'off', samples: 0 },
+      // 端详：翻牌后点一张牌，它浮到眼前（卡位编号；null = 没在端详）
+      inspectSlot: null,
+      hoveredSlot: null,
+      // 洗牌：选牌时快速左右晃动指针/手，牌河重新洗一遍（时间戳，给提示和占星师用）
+      shuffledAt: 0,
 
       // ==================== Actions ====================
       setPhase: (phase) => set({ phase }),
@@ -105,6 +110,9 @@ export const useTarotStore = create(
       setPanelDocked: (panelDocked) => set({ panelDocked }),
       setIntroDone: (introDone) => set({ introDone }),
       setRayTrace: (rayTrace) => set({ rayTrace }),
+      setInspectSlot: (inspectSlot) => set({ inspectSlot }),
+      setHoveredSlot: (hoveredSlot) => set({ hoveredSlot }),
+      markShuffled: () => set({ shuffledAt: Date.now() }),
       // pinchAmount：0 = 两指张开，1 = 已捏上（手势光标据此收紧，提示还差多少）
       setCursor: (x, y, visible = true, source = 'gesture', pinchAmount = 0) => {
         const patch = { cursor: { x, y, visible }, cursorSource: source, pinchAmount };
@@ -166,6 +174,8 @@ export const useTarotStore = create(
           chatStatus: 'idle',
           chatError: '',
           riverAccelerate: false,
+          inspectSlot: null,
+          hoveredSlot: null,
           cards: emptySlots(),
         }),
 

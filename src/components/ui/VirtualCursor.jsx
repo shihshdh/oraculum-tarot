@@ -20,7 +20,7 @@ export default function VirtualCursor() {
       el.style.setProperty('--pinch', amount.toFixed(2));
       el.style.opacity = s.cursor.visible && s.cursorSource === 'gesture' ? '1' : '0';
       el.dataset.pinch = s.isPinching ? '1' : '';
-      el.dataset.hover = s.hoveredRiverId ? '1' : '';
+      el.dataset.hover = s.hoveredRiverId || s.hoveredSlot !== null ? '1' : '';
     };
     apply(useTarotStore.getState());
     return useTarotStore.subscribe(apply);

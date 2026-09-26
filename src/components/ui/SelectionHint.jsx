@@ -19,8 +19,8 @@ export default function SelectionHint() {
   const tip = riverAccelerate
     ? '牌河加速中…'
     : cursorSource === 'gesture'
-      ? '食指指向一张牌，捏合拾取 · 张开手掌让牌河加速'
-      : '停在一张牌上它会慢下来，单击拾取 · 长按空白处加速';
+      ? '食指指向一张牌，捏合拾取 · 张开手掌让牌河加速 · 左右挥手洗牌'
+      : '停在一张牌上它会慢下来，单击拾取 · 长按空白处加速 · 快速左右晃动洗牌';
 
   return (
     <AnimatePresence>

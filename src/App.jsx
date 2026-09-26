@@ -17,6 +17,7 @@ import { useTarotStore } from './store/useTarotStore';
 import { useLiquidInteractions } from './lib/liquid';
 import { DESKTOP } from './lib/edition';
 import RayTraceBadge from './components/ui/RayTraceBadge';
+import InspectPanel from './components/ui/InspectPanel';
 
 // three.js 那一大块等开场碎片落定后才下载、解析
 const TarotCanvas = lazy(() => import('./components/scene/TarotCanvas'));
@@ -43,7 +44,7 @@ export default function App() {
 
   return (
     <div id="app-root" className="relative w-screen overflow-hidden" style={{ height: 'var(--app-h, 100svh)' }}>
-      <div className="absolute inset-0 z-[5]" style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 45%, #171034 0%, #0a0818 55%, #040309 100%)' }}>
+      <div className="absolute inset-0 z-[5]" style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 45%, #18121f 0%, #0a080d 55%, #040305 100%)' }}>
         {sceneOn && <Suspense fallback={null}><TarotCanvas /></Suspense>}
       </div>
 
@@ -55,6 +56,7 @@ export default function App() {
       <TopBar />
       <HistoryPanel />
       <CameraNotice />
+      <InspectPanel />
       {DESKTOP && <RayTraceBadge />}
 
       <HandTracker />

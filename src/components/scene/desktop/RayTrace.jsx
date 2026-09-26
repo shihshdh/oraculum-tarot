@@ -5,7 +5,7 @@ import { WebGLPathTracer, PhysicalCamera } from 'three-gpu-pathtracer';
 import { useTarotStore } from '../../../store/useTarotStore';
 import { TAROT_DECK } from '../../../data/tarotDeck';
 import { SLOT_SPACING, SLOT_Y } from '../CardArray';
-import { ALTAR, drawAltarPattern } from './altarShape';
+import { TABLE_POSE, getTableCanvases, tableGeometry, tableTextures } from './altarShape';
 import { FACE_OFFSET, backTexture, cardBodyGeometry, cardFaceGeometry, faceTexture, foilTexture } from '../cardKit';
 
 /**
@@ -17,7 +17,7 @@ import { FACE_OFFSET, backTexture, cardBodyGeometry, cardFaceGeometry, faceTextu
  *   · 背景透明，星云、星盘、流光仍由实时渲染画在下面；光追结果从 0 渐变盖上去
  *   · 镜头一动（解读面板停靠、窗口改变大小）就重新累积；累积够了停下，不再占显卡
  */
-const MAX_SAMPLES = 1200;
+const MAX_SAMPLES = 2000;
 const START_DELAY = 3200; // 等最后一张牌翻完、粒子散去
 
 /** 程序生成的等距柱状环境贴图：深紫夜色，左上一块暖色柔光箱，右侧一条冷紫轮廓光，下方很暗 */
@@ -31,13 +31,14 @@ function makeEnvironment() {
     for (let x = 0; x < W; x++) {
       const u = x / (W - 1);
       const sky = 0.02 + 0.05 * v;
-      const warm = box(u, v, 0.38, 0.78, 0.07, 0.08) * 9;
-      const warm2 = box(u, v, 0.62, 0.7, 0.05, 0.05) * 4;
-      const rim = box(u, v, 0.85, 0.55, 0.03, 0.25) * 3.5;
+      // 热点宽而柔：太小太亮的光斑会在清漆反射里变成难收敛的"萤火虫"噪点
+      const warm = box(u, v, 0.38, 0.78, 0.12, 0.12) * 3.2;
+      const warm2 = box(u, v, 0.62, 0.7, 0.09, 0.08) * 1.6;
+      const rim = box(u, v, 0.85, 0.55, 0.06, 0.25) * 1.6;
       const i = (y * W + x) * 4;
-      data[i] = sky * 0.55 + warm * 1.0 + warm2 * 1.0 + rim * 0.62;
-      data[i + 1] = sky * 0.42 + warm * 0.82 + warm2 * 0.9 + rim * 0.55;
-      data[i + 2] = sky * 1.0 + warm * 0.55 + warm2 * 0.7 + rim * 1.0;
+      data[i] = sky * 0.7 + warm * 1.0 + warm2 * 1.0 + rim * 0.62;
+      data[i + 1] = sky * 0.62 + warm * 0.82 + warm2 * 0.9 + rim * 0.55;
+      data[i + 2] = sky * 0.7 + warm * 0.55 + warm2 * 0.7 + rim * 1.0;
       data[i + 3] = 1;
     }
   }
@@ -91,15 +92,6 @@ function solid(geometry) {
   return part;
 }
 
-/** 光追台面：深色底 + 金线花纹；金线部分是金属，其余是上了清漆的黑曜石 */
-function altarMaterial() {
-  const map = new THREE.CanvasTexture(drawAltarPattern(true));
-  map.colorSpace = THREE.SRGBColorSpace;
-  const lines = drawAltarPattern(false); // 透明底金线 → 当金属度贴图（有线的地方是金属）
-  const metal = new THREE.CanvasTexture(lines);
-  return new THREE.MeshPhysicalMaterial({ map, metalnessMap: metal, metalness: 1, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.04 });
-}
-
 async function buildScene(cards) {
   const scene = new THREE.Scene();
   const back = backTexture();
@@ -126,28 +118,29 @@ async function buildScene(cards) {
     scene.add(group);
   });
 
-  // 黑曜石镜面台：牌立在上面，倒影、金边的反光都由光线追出来
-  const altarY = ALTAR.y;
-  const altar = new THREE.Mesh(
-    solid(new THREE.CylinderGeometry(ALTAR.radius, ALTAR.radius + 0.1, ALTAR.thickness, 96)),
-    altarMaterial()
-  );
-  altar.scale.set(ALTAR.scaleX, 1, ALTAR.scaleZ);
-  altar.position.set(0, altarY - ALTAR.thickness / 2, ALTAR.z);
-  scene.add(altar);
-  // 台沿一圈金色细边
-  const rim = new THREE.Mesh(solid(new THREE.TorusGeometry(ALTAR.rimRadius, ALTAR.rimTube, 12, 160)), new THREE.MeshPhysicalMaterial({ color: '#e2bd72', metalness: 1, roughness: 0.2 }));
-  rim.rotation.x = Math.PI / 2;
-  rim.scale.set(ALTAR.scaleX, ALTAR.scaleZ, 1);
-  rim.position.set(0, altarY, ALTAR.z);
-  scene.add(rim);
+  // 占卜桌：漆面樱桃木 + 黄铜镶嵌。木纹、清漆高光、铜丝反光、牌的倒影都由光线追出来
+  const tex = tableTextures(await getTableCanvases());
+  const top = new THREE.MeshPhysicalMaterial({ ...tex.top, metalness: 1, roughness: 1, normalScale: new THREE.Vector2(0.6, 0.6), clearcoat: 1, clearcoatRoughness: 0.035 });
+  const side = new THREE.MeshPhysicalMaterial({ ...tex.side, color: '#c4a8a4', roughness: 0.9, clearcoat: 1, clearcoatRoughness: 0.06 });
+  for (const part of splitGroups(tableGeometry())) {
+    const mesh = new THREE.Mesh(part.geometry, part.materialIndex === 0 ? top : side);
+    mesh.position.set(...TABLE_POSE.position);
+    mesh.rotation.set(...TABLE_POSE.rotation);
+    scene.add(mesh);
+  }
+
+  // 桌子正上方的暖色吊灯（与实时画面里的聚光灯同位置）
+  const lamp = new THREE.RectAreaLight('#ffd9a8', 3.2, 4.4, 2.4); // 大而柔：小而亮的灯在清漆反射里会变成噪点
+  lamp.position.set(0, TABLE_POSE.position[1] + 7.5, TABLE_POSE.position[2] + 2.2);
+  lamp.lookAt(0, TABLE_POSE.position[1], TABLE_POSE.position[2]);
+  scene.add(lamp);
 
   // 面光源：左上暖色主光、右下冷紫轮廓光
   const key = new THREE.RectAreaLight('#ffe2b0', 14, 3.2, 1.6);
   key.position.set(-3.5, SLOT_Y + 4, 4.5);
   key.lookAt(0, SLOT_Y, 0);
   scene.add(key);
-  const fill = new THREE.RectAreaLight('#b9a6ff', 8, 1.2, 4);
+  const fill = new THREE.RectAreaLight('#d6ccef', 5, 1.2, 4);
   fill.position.set(5, SLOT_Y + 0.5, 2.5);
   fill.lookAt(0, SLOT_Y, 0);
   scene.add(fill);
@@ -250,7 +243,7 @@ export default function RayTrace() {
           const tracer = new WebGLPathTracer(s.renderer);
           tracer.bounces = 6;
           tracer.transmissiveBounces = 4;
-          tracer.filterGlossyFactor = 0.5;
+          tracer.filterGlossyFactor = 1; // 压住光泽反射里的萤火虫噪点
           tracer.tiles.set(2, 2); // 分块渲染：每帧只追四分之一画面，界面保持流畅
           tracer.minSamples = 3;
           tracer.fadeDuration = 0; // 渐变交给画布的 CSS opacity
@@ -286,6 +279,11 @@ export default function RayTrace() {
   useFrame(() => {
     const s = state.current;
     if (!s || !s.tracer) return;
+    // 端详时牌离开了桌面，光追画面里它还在原位：先藏起来，放回后接着显示（场景没变，不用重新累积）
+    if (useTarotStore.getState().inspectSlot !== null) {
+      s.canvas.style.opacity = '0';
+      return;
+    }
     // 镜头动了（面板停靠、窗口改变）：同步镜头并重新累积
     if (moved(s.lastMatrix, camera.matrixWorld) || s.cam.aspect !== camera.aspect) {
       syncCamera(s.cam, camera);
@@ -296,6 +294,7 @@ export default function RayTrace() {
     const samples = s.tracer.samples;
     const status = useTarotStore.getState().rayTrace.status;
     if (samples >= MAX_SAMPLES) {
+      s.canvas.style.opacity = '1';
       if (useTarotStore.getState().rayTrace.status !== 'done') setRayTrace({ status: 'done', samples: Math.floor(samples) });
       return;
     }

@@ -47,15 +47,16 @@ const nebulaFragment = /* glsl */ `
     vec2 q = vec2(fbm(p + t), fbm(p + vec2(5.2, 1.3) - t));
     vec2 r = vec2(fbm(p + 3.0 * q + vec2(1.7, 9.2) + t * 1.5), fbm(p + 3.0 * q + vec2(8.3, 2.8)));
     float n = fbm(p + 2.5 * r);
-    vec3 deep = vec3(0.022, 0.016, 0.055);
-    vec3 indigo = vec3(0.06, 0.045, 0.16);
-    vec3 violet = vec3(0.19, 0.11, 0.30);
+    // 黑金为主、紫色做远景：近黑的午夜紫底，云里透出深紫，最浓处一点淡紫；金色气流在最上层
+    vec3 deep = vec3(0.017, 0.013, 0.026);
+    vec3 indigo = vec3(0.05, 0.036, 0.075);
+    vec3 violet = vec3(0.17, 0.12, 0.25);
     vec3 gold = vec3(0.95, 0.72, 0.38);
     vec3 col = mix(deep, indigo, smoothstep(0.2, 0.75, n));
-    col = mix(col, violet, smoothstep(0.6, 1.0, n) * 0.4 * length(q) * (0.5 + uEnergy * 0.5));
+    col = mix(col, violet, smoothstep(0.6, 1.0, n) * 0.34 * length(q) * (0.5 + uEnergy * 0.5));
     // 一缕金色气流
     float wisp = smoothstep(0.62, 0.95, fbm(p * 1.4 + r * 1.8 - t * 2.0)) * smoothstep(0.9, 0.1, abs(uv.y + 0.15 + sin(uv.x * 1.3) * 0.18));
-    col += gold * wisp * (0.10 + uEnergy * 0.12);
+    col += gold * wisp * (0.14 + uEnergy * 0.14);
     gl_FragColor = vec4(col, n);
   }
 `;

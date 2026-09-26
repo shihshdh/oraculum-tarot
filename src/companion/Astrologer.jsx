@@ -89,6 +89,7 @@ export default function Astrologer({ onNavigate }) {
   const [pending, setPending] = useState(null);
   const [vision, setVision] = useState(false);
   const openRef = useRef(false);
+  const inspectHinted = useRef(false); // "凑近看看"只说一次
   openRef.current = open;
   const sending = useRef(false);
   const navigateRef = useRef(onNavigate);
@@ -334,6 +335,14 @@ export default function Astrologer({ onNavigate }) {
     } else if (signal.type === 'moment') {
       if (signal.kind === 'picked' && signal.count === 1 && !openRef.current) say({ text: '第一张～凭直觉就好，不用想太多。', mood: 'happy' }, 5000);
       if (signal.kind === 'picked' && signal.count === 4 && !openRef.current) say({ text: '还差最后一张了哦。', mood: 'excited' }, 4000);
+      if (signal.kind === 'shuffled' && !openRef.current) {
+        const lines = ['哗啦——牌重新洗过啦，这回的顺序只属于你。', '洗得好！让牌重新找一找你。', '手气换一换～再凭直觉挑吧。'];
+        say({ text: lines[Math.floor(Math.random() * lines.length)], mood: 'excited' }, 4500);
+      }
+      if (signal.kind === 'inspect' && !openRef.current && !inspectHinted.current) {
+        inspectHinted.current = true;
+        say({ text: '凑近看看～牌面的细节里也藏着答案。', mood: 'happy' }, 4000);
+      }
     }
   }), [say, openChat, reduced]);
 
