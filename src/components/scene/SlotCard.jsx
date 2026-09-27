@@ -6,6 +6,7 @@ import { useTarotStore } from '../../store/useTarotStore';
 import { TAROT_DECK } from '../../data/tarotDeck';
 import { CARD_H, CARD_W, FACE_OFFSET, backMaterial, cardBodyGeometry, cardFaceGeometry, edgeMaterial, faceMaterial, slotFrameGeometry } from './cardKit';
 import ParticleBurst from './ParticleBurst';
+import { cardRoot, liveCards, sceneLights } from './room/roomKit';
 
 const SCALE = 0.9;
 const INSPECT_SCALE = 1.2;
@@ -15,6 +16,7 @@ const tmpPos = new THREE.Vector3();
 const homeQ = new THREE.Quaternion();
 const lookQ = new THREE.Quaternion();
 const euler = new THREE.Euler();
+const fwd = new THREE.Vector3();
 
 /**
  * 下方五个卡位之一
@@ -22,7 +24,7 @@ const euler = new THREE.Euler();
  *   · 牌刚落位：背面朝上，从上方轻轻落下
  *   · 翻开：绕 Y 轴翻转（逆位再转 180°），金色粒子迸发，牌面短暂亮起
  */
-export default function SlotCard({ slotId, position, flipped, reversed, tarotId, registerSlot }) {
+export default function SlotCard({ slotId, position, flipped, reversed, tarotId, registerSlot, deckOpen }) {
   const groupRef = useRef();
   const frameMatRef = useRef();
   const [burst, setBurst] = useState(false);
@@ -45,6 +47,14 @@ export default function SlotCard({ slotId, position, flipped, reversed, tarotId,
   const faceMat = useMemo(() => (tarot ? faceMaterial(tarot) : null), [tarot]);
   useEffect(() => () => faceMat?.dispose(), [faceMat]);
   const bodyMats = useMemo(() => [backMaterial(), edgeMaterial()], []);
+  // 登记给"收牌"（翻开的牌带着牌面飞回去，途中翻成背面朝上）
+  useEffect(() => {
+    const g = groupRef.current;
+    if (!g || !tarotId) return;
+    g.userData.tarot = flipped ? tarot : null;
+    liveCards.add(g);
+    return () => liveCards.delete(g);
+  }, [tarotId, flipped, tarot]);
 
   // 落位
   useEffect(() => {
@@ -88,15 +98,20 @@ export default function SlotCard({ slotId, position, flipped, reversed, tarotId,
       if (k > 0 || before > 0) {
         const t = performance.now() / 1000;
         const ease = k * k * (3 - 2 * k);
-        // 眼前的位置：镜头正前方 3.8 个单位、略偏下
-        tmpPos.set(camera.position.x, camera.position.y - 0.15, camera.position.z - 3.8);
+        // 眼前的位置：镜头正前方 3.8 个单位、略偏下（换算进 cardRoot 的局部坐标，大小也按它的缩放折算）
+        camera.getWorldDirection(fwd);
+        tmpPos.copy(camera.position).addScaledVector(fwd, 3.8);
+        tmpPos.y -= 0.15;
+        const root = cardRoot.current;
+        const inv = root ? 1 / root.scale.x : 1;
+        if (root) root.worldToLocal(tmpPos);
         const arcLift = Math.sin(k * Math.PI) * 0.6; // 飞行时走一道弧线
         g.position.set(
           position[0] + (tmpPos.x - position[0]) * ease,
           position[1] + (tmpPos.y - position[1]) * ease + arcLift,
           position[2] + (tmpPos.z - position[2]) * ease
         );
-        g.scale.setScalar(SCALE + (INSPECT_SCALE - SCALE) * ease);
+        g.scale.setScalar(SCALE + (INSPECT_SCALE * inv - SCALE) * ease);
         homeQ.setFromEuler(euler.set(0, Math.PI, reversed ? Math.PI : 0));
         const px = st.cursor.visible ? st.cursor.x * 2 - 1 : 0;
         const py = st.cursor.visible ? st.cursor.y * 2 - 1 : 0;
@@ -107,17 +122,25 @@ export default function SlotCard({ slotId, position, flipped, reversed, tarotId,
     if (faceMat) {
       flash.current = Math.max(0, flash.current - dt * 0.9);
       faceMat.emissiveIntensity = 0.1 + flash.current * 0.6;
+      // 翻开的一瞬间牌面的光洒到桌上
+      if (flash.current > 0.05 && groupRef.current) {
+        const l = sceneLights[3];
+        groupRef.current.getWorldPosition(l.pos);
+        l.strength = Math.max(l.strength, flash.current * 1.4);
+      }
     }
     if (frameMatRef.current) {
       const s = useTarotStore.getState();
       const next = s.cards.find((c) => !c.tarotId)?.slotId === slotId && s.phase === 'selecting';
       const t = performance.now() / 1000;
-      frameMatRef.current.opacity = next ? 0.55 + Math.sin(t * 3) * 0.3 : 0.22;
+      // 牌组展开到一半，五个卡位的金框才依次描出来
+      const appear = Math.min(1, Math.max(0, (Date.now() - s.deckOpenedAt - 700 - slotId * 120) / 700));
+      frameMatRef.current.opacity = (next ? 0.55 + Math.sin(t * 3) * 0.3 : 0.22) * appear * appear;
     }
   });
 
   if (!tarotId) {
-    if (phase !== 'selecting' && phase !== 'revealing' && phase !== 'done') return null;
+    if ((phase !== 'selecting' && phase !== 'revealing' && phase !== 'done') || !deckOpen) return null;
     return (
       <group position={position} scale={SCALE}>
         <mesh geometry={slotFrameGeometry()}>

@@ -12,7 +12,9 @@ export default function CardInfoOverlay() {
   const cards = useTarotStore((s) => s.cards);
   const phase = useTarotStore((s) => s.phase);
   const reduced = prefersReduced();
-  const showPositions = phase === 'selecting' || phase === 'revealing' || phase === 'done';
+  const deckOpen = useTarotStore((s) => s.deckOpen);
+  // 桌上的牌组点开、卡位描出来之后才显示位置名
+  const showPositions = (phase === 'selecting' || phase === 'revealing' || phase === 'done') && deckOpen;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 z-30" data-slot-overlay style={{ top: 'calc(var(--slot-bottom, 80vh) + 14px)' }}>
@@ -24,7 +26,7 @@ export default function CardInfoOverlay() {
           return (
             <div key={c.slotId} className="absolute top-0 flex w-[19vw] max-w-[180px] -translate-x-1/2 flex-col items-center text-center" style={{ left: `var(--slot-x-${i}, ${10 + i * 20}%)` }}>
               {showPositions && (
-                <div className="mb-1.5 flex items-center gap-1.5 opacity-80">
+                <div className="mb-1.5 flex items-center gap-1.5 opacity-80" style={{ animation: `slot-label-in 700ms var(--ease) ${0.9 + i * 0.12}s both` }}>
                   <span className="hidden font-display text-[9px] tracking-[0.3em] md:inline" style={{ color: 'var(--ink3)' }}>{POSITION_EN[i]}</span>
                   <span className="text-[11px] tracking-[0.3em]" style={{ color: 'var(--gold)' }}>{POSITION_NAMES[i]}</span>
                 </div>

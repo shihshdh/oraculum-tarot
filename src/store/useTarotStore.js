@@ -14,7 +14,7 @@ const emptySlots = () =>
   Array.from({ length: 5 }, (_, i) => ({ slotId: i, flipped: false, tarotId: null, reversed: false }));
 
 // 只广播真正变了的字段：光标每秒几十次更新，不能每次都把解读全文、聊天记录序列化一遍
-const STATE_KEYS = ['phase', 'cards', 'pickedTarotIds', 'question', 'reading', 'readingStatus', 'readingMood', 'chatMessages', 'chatStatus', 'riverAccelerate'];
+const STATE_KEYS = ['phase', 'cards', 'pickedTarotIds', 'question', 'reading', 'readingStatus', 'readingMood', 'chatMessages', 'chatStatus', 'riverAccelerate', 'deckOpen', 'deckOpenedAt'];
 const CURSOR_KEYS = ['cursor', 'isPinching', 'hoveredRiverId'];
 let pendingCursor = null;
 
@@ -101,6 +101,9 @@ export const useTarotStore = create(
       hoveredSlot: null,
       // 洗牌：选牌时快速左右晃动指针/手，牌河重新洗一遍（时间戳，给提示和占星师用）
       shuffledAt: 0,
+      // 桌上的牌组：进入选牌后先点一下它，牌才浮起来展开成牌河（deckOpenedAt = 点开的时刻，动画据此排时间）
+      deckOpen: false,
+      deckOpenedAt: 0,
 
       // ==================== Actions ====================
       setPhase: (phase) => set({ phase }),
@@ -113,6 +116,7 @@ export const useTarotStore = create(
       setInspectSlot: (inspectSlot) => set({ inspectSlot }),
       setHoveredSlot: (hoveredSlot) => set({ hoveredSlot }),
       markShuffled: () => set({ shuffledAt: Date.now() }),
+      openDeck: () => set({ deckOpen: true, deckOpenedAt: Date.now() }),
       // pinchAmount：0 = 两指张开，1 = 已捏上（手势光标据此收紧，提示还差多少）
       setCursor: (x, y, visible = true, source = 'gesture', pinchAmount = 0) => {
         const patch = { cursor: { x, y, visible }, cursorSource: source, pinchAmount };
@@ -176,6 +180,7 @@ export const useTarotStore = create(
           riverAccelerate: false,
           inspectSlot: null,
           hoveredSlot: null,
+          deckOpen: false,
           cards: emptySlots(),
         }),
 

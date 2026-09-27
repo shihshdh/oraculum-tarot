@@ -57,6 +57,49 @@ export function cardFaceGeometry() {
 }
 export const FACE_OFFSET = DEPTH / 2 + 0.0008;
 
+let deckGeo = null;
+/**
+ * 桌上的一整副牌：牌形的厚块，底面在 z = 0、厚度沿 +z（躺平时转成朝上）。
+ * group 0 = 顶面/底面（牌背），group 1 = 侧面（一张张牌的边）；侧面 uv 的 v = 0..1 从底到顶。
+ */
+export function deckGeometry(thickness) {
+  if (deckGeo) return deckGeo;
+  const geo = new THREE.ExtrudeGeometry(roundedRect(CARD_W, CARD_H, RADIUS), { depth: thickness, bevelEnabled: false, curveSegments: 6 });
+  const caps = geo.groups.find((g) => g.materialIndex === 0);
+  normalizeUV(geo, CARD_W, CARD_H, caps.start + caps.count);
+  const pos = geo.attributes.position;
+  const uv = geo.attributes.uv;
+  for (let i = caps.start + caps.count; i < pos.count; i++) uv.setY(i, pos.getZ(i) / thickness);
+  uv.needsUpdate = true;
+  geo.computeVertexNormals();
+  deckGeo = geo;
+  return geo;
+}
+
+let edgeStripes = null;
+/** 牌堆侧面：一张张牌的描金边和细缝（远看十来条就够，太密会糊成一片），每张的金色深浅略有不同 */
+export function deckEdgeTexture() {
+  if (edgeStripes) return edgeStripes;
+  const N = 13;
+  const c = document.createElement('canvas');
+  c.width = 4;
+  c.height = N * 8;
+  const g = c.getContext('2d');
+  for (let i = 0; i < N; i++) {
+    const y = i * 8;
+    const k = 0.78 + ((i * 37) % 11) / 40;
+    g.fillStyle = `rgb(${Math.round(196 * k)},${Math.round(160 * k)},${Math.round(98 * k)})`;
+    g.fillRect(0, y, 4, 5);
+    g.fillStyle = '#120d0b';
+    g.fillRect(0, y + 5, 4, 3);
+  }
+  edgeStripes = new THREE.CanvasTexture(c);
+  edgeStripes.colorSpace = THREE.SRGBColorSpace;
+  edgeStripes.wrapS = THREE.RepeatWrapping;
+  edgeStripes.anisotropy = maxAniso;
+  return edgeStripes;
+}
+
 let slotGeo = null;
 /** 空卡位的金色细框 */
 export function slotFrameGeometry() {

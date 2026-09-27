@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useTarotStore } from '../../store/useTarotStore';
 import { POSITION_NAMES } from '../../data/spread';
 import { D, EASE, prefersReduced, rise } from '../../lib/motion';
+import { isTouchOnly } from '../../lib/device';
 
 /**
  * 选牌阶段的进度：五个位置依次点亮，下一个要放的位置在呼吸。
@@ -13,10 +14,13 @@ export default function SelectionHint() {
   const pickedTarotIds = useTarotStore((s) => s.pickedTarotIds);
   const cursorSource = useTarotStore((s) => s.cursorSource);
   const riverAccelerate = useTarotStore((s) => s.riverAccelerate);
+  const deckOpen = useTarotStore((s) => s.deckOpen);
   const reduced = prefersReduced();
 
   const picked = pickedTarotIds.length;
-  const tip = riverAccelerate
+  const tip = !deckOpen
+    ? cursorSource === 'gesture' ? '食指指向桌上的牌组，捏合唤醒牌河' : isTouchOnly() ? '轻触桌上的牌组，唤醒牌河' : '点击桌上的牌组，唤醒牌河'
+    : riverAccelerate
     ? '牌河加速中…'
     : cursorSource === 'gesture'
       ? '食指指向一张牌，捏合拾取 · 张开手掌让牌河加速 · 左右挥手洗牌'
@@ -28,7 +32,7 @@ export default function SelectionHint() {
         <motion.div className="pointer-events-none fixed inset-x-0 top-[70px] z-30 flex flex-col items-center gap-3 px-4 sm:top-[82px]" {...rise(reduced, -8)}>
           <div className="glass flex items-center gap-4 rounded-full py-2 pl-5 pr-3">
             <span className="font-serif-sc text-[13px] tracking-[0.2em]" style={{ color: 'var(--ink2)' }}>
-              {picked < 5 ? '拾取命运之牌' : '牌阵已成'}
+              {!deckOpen ? '唤醒牌组' : picked < 5 ? '拾取命运之牌' : '牌阵已成'}
             </span>
             <ol className="m-0 flex list-none gap-1.5 p-0" aria-label={`已拾取 ${picked} / 5`}>
               {cards.map((c, i) => {

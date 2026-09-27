@@ -8,6 +8,7 @@ import FloatingCard from './FloatingCard';
 import SlotCard from './SlotCard';
 import FlyingCard from './FlyingCard';
 import ParticleBurst from './ParticleBurst';
+import { DECK_OPEN_MS, DECK_TOP, cardRoot } from './room/roomKit';
 
 /**
  * 漂浮牌河 + 下方五个卡位
@@ -17,6 +18,9 @@ import ParticleBurst from './ParticleBurst';
  *   4. 洗牌：选牌时快速左右晃动指针或手（1 秒内来回 4 次以上），牌河旋转着重新洗一遍
  *   5. 磁性：指针靠近时，附近的牌微微抬起、朝指针倾斜（指针在牌河平面上的位置写进 cursorWorld）
  *   6. 端详：翻牌后点一张牌，它浮到眼前；再点一下放回
+ *   0. 进入选牌时牌还在桌上：点一下桌上的牌组（room/Deck），牌才一张张浮起、展开成牌河
+ *
+ * 坐标：这里的一切都在 cardRoot 的局部坐标里（窄屏、面板让位时由 CameraRig 移动/缩放 cardRoot，镜头不动）。
  *
  * 性能：悬停检测每帧只做一次射线检测（对所有命中盒），只在悬停对象变化时写 store；
  * 捏合通过 store.subscribe 监听，不引起本组件重渲染。
@@ -25,7 +29,7 @@ import ParticleBurst from './ParticleBurst';
 export const RIVER_Y = 1.3;
 const RIVER_SPEED = 0.4;
 const RIVER_SPACING = 1.2;
-export const SLOT_Y = -1.5;
+export const SLOT_Y = -1.25; // 卡位悬在桌面上方一点（照片重构的桌面就在这一带）
 export const SHUFFLE_MS = 700; // 洗牌动画时长：一半时牌几乎看不见，就在那一刻换顺序
 
 function shuffled(list) {
@@ -50,7 +54,11 @@ export default function CardArray() {
   const offsetRef = useRef(0);
   const [order, setOrder] = useState(() => TAROT_DECK);
   const riverDeck = useMemo(() => order.filter((t) => !pickedTarotIds.includes(t.id)), [order, pickedTarotIds]);
-  const cursorWorld = useRef(new THREE.Vector3(0, -99, 0)); // 指针在牌河平面 z = 0 上的位置（磁性用）
+  const cursorWorld = useRef(new THREE.Vector3(0, -99, 0)); // 指针在牌河平面 z = 0 上的位置（磁性用，局部坐标）
+  // 桌上牌组顶面在局部坐标里的位置、cardRoot 的缩放：牌从牌组飞出来时用
+  const deckLocal = useRef(new THREE.Vector3());
+  const rootScale = useRef(1);
+  const deckOpen = useTarotStore((s) => s.deckOpen);
   const [bursts, setBursts] = useState([]);
   const slotPositions = useMemo(() => cards.map((_, i) => [(i - 2) * SLOT_SPACING, SLOT_Y, 0]), [cards.length]);
 
@@ -83,12 +91,19 @@ export default function CardArray() {
   }, []);
 
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const localRay = useMemo(() => new THREE.Ray(), []);
+  const inverse = useMemo(() => new THREE.Matrix4(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
   const sticky = useRef({ id: null, at: 0 });
   const speed = useRef(RIVER_SPEED);
 
   useFrame((_, dt) => {
     const s = useTarotStore.getState();
+    const root = cardRoot.current;
+    if (root) {
+      rootScale.current = root.scale.x;
+      root.worldToLocal(deckLocal.current.copy(DECK_TOP));
+    }
     // 端详：翻牌后，指针下是哪张牌（牌河此时已经收起，下面的逻辑都不用跑）
     if (s.phase === 'done' && !s.isMirror) {
       let slot = null;
@@ -101,10 +116,12 @@ export default function CardArray() {
       if (s.hoveredRiverId) s.setHoveredRiverId(null);
       return;
     }
-    if (s.phase !== 'selecting' && s.phase !== 'revealing') return;
+    if ((s.phase !== 'selecting' && s.phase !== 'revealing') || !s.deckOpen) return;
 
-    // 牌河速度平滑过渡：悬停几乎停下，加速时 3.5 倍
-    const target = s.hoveredRiverId && s.phase === 'selecting' ? RIVER_SPEED * 0.06 : s.riverAccelerate && s.phase === 'selecting' ? RIVER_SPEED * 3.5 : RIVER_SPEED;
+    // 牌河速度平滑过渡：悬停几乎停下，加速时 3.5 倍；刚展开时从静止慢慢流动起来（牌还在往里飞）
+    const opening = Date.now() - s.deckOpenedAt;
+    const ramp = Math.min(1, Math.max(0, (opening - 900) / 1400));
+    const target = (s.hoveredRiverId && s.phase === 'selecting' ? RIVER_SPEED * 0.06 : s.riverAccelerate && s.phase === 'selecting' ? RIVER_SPEED * 3.5 : RIVER_SPEED) * ramp * ramp;
     speed.current += (target - speed.current) * (1 - Math.exp(-dt * 8));
     offsetRef.current += speed.current * dt;
     const total = riverDeck.length * RIVER_SPACING;
@@ -115,7 +132,7 @@ export default function CardArray() {
 
     // 洗牌检测：指针横向速度超过每秒 1.6 个屏宽、方向来回翻转，0.9 秒内 4 次
     const sh = shake.current;
-    if (s.phase === 'selecting' && s.cursor.visible) {
+    if (s.phase === 'selecting' && s.cursor.visible && opening > DECK_OPEN_MS) {
       if (sh.lastX !== null) {
         const dtm = (now0 - sh.lastT) / 1000;
         const v = dtm > 0 ? (s.cursor.x - sh.lastX) / dtm : 0;
@@ -141,13 +158,15 @@ export default function CardArray() {
     if (s.cursor.visible) {
       ndc.set(s.cursor.x * 2 - 1, -(s.cursor.y * 2 - 1));
       raycaster.setFromCamera(ndc, camera);
-      if (!raycaster.ray.intersectPlane(plane, cursorWorld.current)) cursorWorld.current.set(0, -99, 0);
+      localRay.copy(raycaster.ray);
+      if (root) localRay.applyMatrix4(inverse.copy(root.matrixWorld).invert());
+      if (!localRay.intersectPlane(plane, cursorWorld.current)) cursorWorld.current.set(0, -99, 0);
     } else {
       cursorWorld.current.set(0, -99, 0);
     }
 
     let id = null;
-    if (s.phase === 'selecting' && s.cursor.visible && Date.now() - s.shuffledAt > SHUFFLE_MS) {
+    if (s.phase === 'selecting' && s.cursor.visible && Date.now() - s.shuffledAt > SHUFFLE_MS && opening > DECK_OPEN_MS) {
       const list = [...hits.current];
       for (const hit of raycaster.intersectObjects(list, false)) {
         const hitId = hit.object.userData.tarotId;
@@ -219,6 +238,13 @@ export default function CardArray() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // 牌组刚被点开：牌河从头、从静止开始
+  useEffect(() => {
+    if (!deckOpen) return;
+    offsetRef.current = 0;
+    speed.current = 0;
+  }, [deckOpen]);
+
   useEffect(() => {
     if (phase === 'splash') {
       setFlying([]);
@@ -227,18 +253,18 @@ export default function CardArray() {
     }
   }, [phase]);
 
-  const showRiver = phase === 'selecting' || phase === 'revealing';
+  const showRiver = (phase === 'selecting' || phase === 'revealing') && deckOpen;
   return (
     <>
       {showRiver &&
         riverDeck.map((tarot, i) => (
-          <FloatingCard key={tarot.id} tarot={tarot} baseIndex={i} totalCount={riverDeck.length} spacing={RIVER_SPACING} yPosition={RIVER_Y} offsetRef={offsetRef} register={register} cursorWorld={cursorWorld} />
+          <FloatingCard key={tarot.id} tarot={tarot} baseIndex={i} totalCount={riverDeck.length} spacing={RIVER_SPACING} yPosition={RIVER_Y} offsetRef={offsetRef} register={register} cursorWorld={cursorWorld} deckLocal={deckLocal} rootScale={rootScale} />
         ))}
       {flying.map((f) => (
         <FlyingCard key={f.id} startY={RIVER_Y} targetPos={f.target} startedAt={f.startedAt} duration={FLY_DURATION} />
       ))}
       {cards.map((card, i) => (
-        <SlotCard key={card.slotId} slotId={card.slotId} position={slotPositions[i]} flipped={card.flipped} reversed={card.reversed} tarotId={card.tarotId} registerSlot={registerSlot} />
+        <SlotCard key={card.slotId} slotId={card.slotId} position={slotPositions[i]} flipped={card.flipped} reversed={card.reversed} tarotId={card.tarotId} registerSlot={registerSlot} deckOpen={deckOpen} />
       ))}
       {bursts.map((id) => (
         <group key={id} position={[0, RIVER_Y, 0.6]} scale={[3.2, 1.2, 1]}>

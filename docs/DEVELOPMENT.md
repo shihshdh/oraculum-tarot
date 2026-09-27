@@ -16,16 +16,26 @@
 
 - 双击 `打包客户端.bat`（= `npm run desktop`）：构建客户端版 → Electron 打包 → 安装到 `D:\ORACULUM\app`，桌面生成「ORACULUM 塔罗」快捷方式；数据在 `D:\ORACULUM\data`
 - 与网页版同一份代码，`VITE_EDITION=desktop`（`.env.desktop`）打开这些效果：至少 1.5 倍超采样 + 8 倍 MSAA、1024 环境反射、更强泛光、色散、两层光尘、牌背烫金流光（`cardKit.js` 的 `withSheen`）、环绕牌阵的流动光带（`scene/desktop/FlowLight.jsx`）
-- 光追：五张牌翻开后，`scene/desktop/RayTrace.jsx` 用 three-gpu-pathtracer 在本机 GPU 上路径追踪牌阵（黑曜石镜面台、面光源、真实倒影），累积 1200 次采样后停下；首次要编译约十几秒着色器。注意这个版本的库：镜头不能用 `PhysicalCamera.copy()`（景深参数会变 NaN），多材质几何体要先按 group 拆开
+- 光追：五张牌翻开后，`scene/desktop/RayTrace.jsx` 用 three-gpu-pathtracer 在本机 GPU 上路径追踪牌阵（面光源 + 程序生成的烛光环境；牌阵跟随 cardRoot 的变换），累积 2000 次采样后停下；首次要编译约二三十秒着色器。桌面与倒影由实时的占卜室提供。注意这个版本的库：镜头不能用 `PhysicalCamera.copy()`（景深参数会变 NaN），多材质几何体要先按 group 拆开
 - 主进程 `desktop/main.cjs`：`oraculum://app/` 提供页面，`/api/*` 转发到 Netlify 镜像；强制独显；F11 全屏、F5 刷新、F12 开发者工具
 - 调试：`npm run desktop:dev`（不安装，直接用 Electron 跑）
+
+## v4.4 · 占卜室
+
+- **场景**：首页和整个占卜过程都在一间 3D 占卜室里。一张照片 → Depth Anything V2 Large 逐像素深度 → 按照片里牌组的透视（五个特征点，误差 < 1 像素）反解出镜头俯角 9.1°、离桌面高度，按桌面平面标定深度尺度（远处另接一段，后墙约 60 单位）。资源由 `scripts/build-room.py` 生成：`public/textures/room/`（照片大/小图、16 位反深度图）和 `src/data/room.json`（标定参数）。照片里原来的牌组已经抹掉（从旁边搬木纹、羽化融合），由 3D 牌组（`scene/room/Deck.jsx`）顶替在同一位置
+- **渲染**（`scene/room/Room.jsx`）：一个深度像素一个顶点，顶点着色器用 `texelFetch` 解码深度并推到镜头射线上，相邻像素差分重建法线；烛火（亮而暖的像素）各自摇曳、亮度超过 1 交给泛光；星盘、牌组、悬停/翻开的牌是 4 个动态光源（`sceneLights`），按法线照亮房间；平面反射：沿桌面镜像镜头、斜裁剪面裁掉桌下，半分辨率渲染牌阵，桌面像素按菲涅尔叠加、沿木纹扰动、纵向拉丝模糊。房间不写深度、最先画，牌永远在它前面
+- **镜头与牌阵**：镜头固定在照片拍摄位置，只随指针轻轻转头（左右 ≤ 6°、上下 ≤ 3.5°，范围由 `lookLimits` 按视角实时算出，竖屏再按宽高比缩小），超宽屏自动收窄视角保证有余量——所以永远不会露出照片边缘。以前靠挪镜头做的竖屏适配、面板让位，改成移动/缩放牌阵的根节点 `cardRoot`（绕镜头等比缩放，画面与退后镜头完全一致）；牌名投影、射线检测、端详、光追都按 cardRoot 换算
+- **交互**：进入选牌后先点桌上的牌组——牌从牌堆顶依次掀起（从正中向两侧，贝塞尔弧线 + 五次平滑缓动），打着旋升起再扫进牌河，牌堆随之变薄；星盘法阵竖直悬浮在牌阵后方、缓缓摆动，此刻被点燃。重来时空中的牌飞回牌堆叠好（`scene/room/Gather.jsx`，牌堆按同一时间线长高）。之后的选牌逻辑不变
+- **解读文字**：流式写出时每个新字从金色星光里亮起（只动 opacity / color / text-shadow），约每 17 个字迸一颗小星芒，光标是一颗闪烁的星；挂载前已有的字不重放，写完 1.6 秒后合并回普通文本
+- **流畅度**：去掉星云（原来最贵的一块）和胶片颗粒（噪点）；MSAA、泛光层级创建后不再变化（以前掉帧降级时会重建整条后期管线，卡一下）；降级只关桌面反射；解读面板独立合成层 + `contain`，面板里的按钮不再做背景模糊。RTX 5070 Ti 实测全流程约 240 帧、没有超过 12.6ms 的帧
+- `?norefl` 关掉桌面反射（对比、排查性能用）
 
 ## v4.1
 
 - **流畅度**：手势识别挪到 Web Worker（摄像头 640×480、只在新帧时识别，拿不到 Worker 自动回主线程）；牌河 78 张牌不再随光标重渲染，悬停改成每帧一次射线检测；副屏同步只发变化的字段。Intel 核显实测选牌时约 57 帧、无长任务。
 - **牌面与牌背**：换成 1909 年初版 Rider–Waite–Smith 扫描（Wikimedia Commons，公有领域，约 800×1386）；牌背用初版的「蔷薇与百合」花纹重新配色成夜蓝底烫金，3D 里烫金部分会反光。
 - **标志与开场**：新标志（拱顶牌框 + 四片菱形拼成的四芒星）；开场四片液态玻璃从屏幕四角飞来拼合、牌框描出、字标浮现、标志飞进顶栏（WebGL 玻璃在 Worker 里画；地址加 `?nointro` 跳过，`?introdebug` 打印时间轴）。
-- **场景**：圆角有厚度的描金卡片、烫金反射环境光、GPU 星云与星空、牌阵下方的星盘法阵（翻牌后亮起）、金色浮尘、900 颗 GPU 粒子、MSAA + 泛光 + 暗角 + 胶片颗粒；掉帧时自动降分辨率和特效。
+- **场景**：圆角有厚度的描金卡片、烫金反射环境光、GPU 星云与星空、牌阵下方的星盘法阵（翻牌后亮起）、金色浮尘、900 颗 GPU 粒子、MSAA + 泛光 + 暗角 + 胶片颗粒；掉帧时自动降分辨率和特效。（v4.4 起星云、胶片颗粒换成了占卜室）
 
 ## v4 改了什么
 
@@ -87,13 +97,16 @@ src/
 ├── lib/companionBus.js 页面 → 占星师的信号（解读进度、抽牌）
 ├── companion/          占星师：Astrologer（行为）、AstrologerStage（Live2D）、actions、vision
 ├── components/ui/      TopBar、Splash、Question、ReadingPanel、History、ShareSheet、AISettings…
-└── components/scene/   3D 牌河、卡位、粒子、镜头
+├── components/scene/   3D 牌河、卡位、粒子、镜头
+│   └── room/           占卜室：roomKit（标定与共享参数）、Room（重构 + 光照 + 反射）、Deck（桌上牌组）、Gather（收牌）
 public/companion/       Live2D 模型 Mao 与 Cubism Core
 ```
 
 ## 第三方素材与许可
 
 - 牌面与牌背：1909 年 Rider–Waite–Smith「Roses & Lilies」初版扫描，来自 [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:Rider-Waite_tarot_deck_(Roses_%26_Lilies))，公有领域；牌背为在原图花纹上重新配色。
+
+- 占卜室照片：作者提供的图片；深度由 [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2)（Large，CC-BY-NC-4.0，仅离线生成资源时使用，不随应用分发）估计。
 
 - 占星师形象：Live2D 官方示例模型「Mao」（[CubismWebSamples](https://github.com/Live2D/CubismWebSamples)），按 [Live2D Free Material License](https://www.live2d.com/eula/live2d-free-material-license-agreement_cn.html) 原样使用；个人和年营收 1000 万日元以下的小规模组织可免费使用，详见 `public/companion/mao/LICENSE-Live2D.md`。
 - Live2D Cubism Core（`public/companion/live2dcubismcore.min.js`）：Live2D Inc. 专有软件，按其再分发条款提供。

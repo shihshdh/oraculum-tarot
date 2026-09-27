@@ -132,6 +132,8 @@ export default function ReadingPanel() {
             data-companion-avoid
             data-no-card-click
             aria-label="占星师的解读"
+            // 独立合成层 + 内容隔离：滑入滑出只动 transform / opacity，不牵动页面其它部分重排重绘
+            style={{ willChange: 'transform, opacity', contain: 'layout paint style' }}
             initial={{ opacity: 0, x: reduced ? 0 : 48 }}
             animate={{ opacity: 1, x: 0, transition: { duration: D.hero, ease: EASE, delay: 0.35 } }}
             exit={{ opacity: 0, x: reduced ? 0 : 32, transition: { duration: D.state } }}
@@ -166,7 +168,7 @@ export default function ReadingPanel() {
                     return (
                       <li key={c.slotId} className="min-w-0 text-center">
                         <div className="overflow-hidden rounded-md" style={{ aspectRatio: '1 / 1.7', boxShadow: '0 4px 12px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,246,225,.15)' }}>
-                          {tarot && <img src={getCardImageUrl(tarot)} alt={`${POSITION_NAMES[i]}：${tarot.nameZh}${c.reversed ? '（逆位）' : ''}`} className="block h-full w-full object-cover" style={{ transform: c.reversed ? 'rotate(180deg)' : undefined }} draggable={false} />}
+                          {tarot && <img src={getCardImageUrl(tarot)} alt={`${POSITION_NAMES[i]}：${tarot.nameZh}${c.reversed ? '（逆位）' : ''}`} className="block h-full w-full object-cover" style={{ transform: c.reversed ? 'rotate(180deg)' : undefined }} draggable={false} decoding="async" />}
                         </div>
                         <div className="mt-1 text-[10px] tracking-[0.1em]" style={{ color: 'var(--gold)' }}>{POSITION_NAMES[i]}</div>
                         <div className="truncate text-[11px]" style={{ color: 'var(--ink2)' }}>{tarot?.nameZh}{c.reversed ? '·逆' : ''}</div>

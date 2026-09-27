@@ -1,158 +1,19 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useTarotStore } from '../../store/useTarotStore';
 import { prefersReduced } from '../../lib/motion';
+import { sceneLights } from './room/roomKit';
 
 /**
- * 场景背景，全部在 GPU 上画：
- *   · Nebula：分形噪声的星云（深靛 / 紫 / 一缕金），低分辨率画、隔帧更新；星星在全分辨率的第二遍里画
- *   · AstralSigil：牌阵下方的星盘法阵——同心圆、刻度、十二宫、旋转的六芒星，翻牌后亮起
+ * AstralSigil：悬在牌阵后方半空中的星盘法阵——同心圆、刻度、十二宫、旋转的六芒星，全部在 GPU 上画。
+ * 牌组点开时被点燃，之后常亮，翻牌后更亮；它是真的光源：金光照亮桌面和墙面，也会倒映在桌上。
  */
 
-const nebulaVertex = /* glsl */ `
+const planeVertex = /* glsl */ `
   varying vec2 vUv;
   void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
 `;
-const NOISE = /* glsl */ `
-  float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-  float noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
-  }
-  float fbm(vec2 p) {
-    float v = 0.0, a = 0.5;
-    mat2 r = mat2(0.8, -0.6, 0.6, 0.8);
-    for (int i = 0; i < 5; i++) { v += a * noise(p); p = r * p * 2.03 + 0.17; a *= 0.5; }
-    return v;
-  }
-`;
-
-// 第一遍：星云本体。又软又慢，所以只在约 1/3 分辨率下画、隔帧更新——这是整个场景最贵的一块，
-// 这样处理后像素工作量降到原来的约 1/18。alpha 里存星云密度，给第二遍调星星亮度用。
-const nebulaFragment = /* glsl */ `
-  precision highp float;
-  varying vec2 vUv;
-  uniform float uTime;
-  uniform vec2 uAspect;
-  uniform vec2 uPointer;
-  uniform float uEnergy;
-  ${NOISE}
-  void main() {
-    vec2 uv = (vUv - 0.5) * uAspect;
-    float t = uTime * 0.018;
-    vec2 p = uv * 1.15 + uPointer * 0.05;
-    // 域扭曲让星云有丝缕感
-    vec2 q = vec2(fbm(p + t), fbm(p + vec2(5.2, 1.3) - t));
-    vec2 r = vec2(fbm(p + 3.0 * q + vec2(1.7, 9.2) + t * 1.5), fbm(p + 3.0 * q + vec2(8.3, 2.8)));
-    float n = fbm(p + 2.5 * r);
-    // 黑金为主、紫色做远景：近黑的午夜紫底，云里透出深紫，最浓处一点淡紫；金色气流在最上层
-    vec3 deep = vec3(0.017, 0.013, 0.026);
-    vec3 indigo = vec3(0.05, 0.036, 0.075);
-    vec3 violet = vec3(0.17, 0.12, 0.25);
-    vec3 gold = vec3(0.95, 0.72, 0.38);
-    vec3 col = mix(deep, indigo, smoothstep(0.2, 0.75, n));
-    col = mix(col, violet, smoothstep(0.6, 1.0, n) * 0.34 * length(q) * (0.5 + uEnergy * 0.5));
-    // 一缕金色气流
-    float wisp = smoothstep(0.62, 0.95, fbm(p * 1.4 + r * 1.8 - t * 2.0)) * smoothstep(0.9, 0.1, abs(uv.y + 0.15 + sin(uv.x * 1.3) * 0.18));
-    col += gold * wisp * (0.14 + uEnergy * 0.14);
-    gl_FragColor = vec4(col, n);
-  }
-`;
-
-// 第二遍：全分辨率。取星云贴图，叠上清晰的星星和暗角（星星必须全分辨率，否则会糊）。
-const skyFragment = /* glsl */ `
-  precision highp float;
-  varying vec2 vUv;
-  uniform sampler2D uNebula;
-  uniform float uTime;
-  uniform vec2 uAspect;
-  uniform vec2 uPointer;
-  float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-  // 一层星星：网格里每格一颗，随机亮度与闪烁
-  float stars(vec2 p, float scale, float t) {
-    vec2 g = p * scale;
-    vec2 id = floor(g), f = fract(g) - 0.5;
-    float h = hash(id);
-    vec2 o = vec2(hash(id + 7.1), hash(id + 3.7)) - 0.5;
-    float d = length(f - o * 0.7);
-    float size = 0.015 + h * h * 0.04;
-    float tw = 0.55 + 0.45 * sin(t * (0.6 + h * 2.5) + h * 40.0);
-    return smoothstep(size, 0.0, d) * step(0.8, h) * tw;
-  }
-  void main() {
-    vec4 neb = texture2D(uNebula, vUv);
-    vec2 uv = (vUv - 0.5) * uAspect;
-    vec2 sp = uv + uPointer * 0.01;
-    float s = stars(sp, 38.0, uTime) * 0.55 + stars(sp + uPointer * 0.012 + 3.1, 22.0, uTime * 1.3) * 0.8 + stars(sp + uPointer * 0.025 + 7.7, 11.0, uTime * 0.8);
-    vec3 col = neb.rgb + vec3(1.0, 0.95, 0.86) * s * (0.45 + neb.a * 0.6);
-    float v = smoothstep(1.35, 0.25, length(uv * vec2(0.85, 1.1)));
-    col *= mix(0.35, 1.0, v);
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
-const fullscreenVertex = /* glsl */ `
-  varying vec2 vUv;
-  void main() { vUv = uv; gl_Position = vec4(position.xy * 2.0, 0.0, 1.0); }
-`;
-
-export function Nebula() {
-  const ref = useRef();
-  const { viewport, camera, gl, size } = useThree();
-  const reduced = useMemo(() => prefersReduced(), []);
-  const shared = useMemo(() => ({
-    uTime: { value: 0 }, uAspect: { value: new THREE.Vector2(1, 1) }, uPointer: { value: new THREE.Vector2() }, uEnergy: { value: 0 },
-  }), []);
-  // 低分辨率的星云画布 + 它自己的一个全屏三角形
-  const offscreen = useMemo(() => {
-    const target = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false, stencilBuffer: false, type: THREE.HalfFloatType });
-    const scene = new THREE.Scene();
-    const quad = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({ vertexShader: fullscreenVertex, fragmentShader: nebulaFragment, uniforms: shared, depthTest: false, depthWrite: false }));
-    quad.frustumCulled = false;
-    scene.add(quad);
-    return { target, scene, camera: new THREE.Camera() };
-  }, [shared]);
-  const skyUniforms = useMemo(() => ({ ...shared, uNebula: { value: offscreen.target.texture } }), [shared, offscreen]);
-  useEffect(() => () => offscreen.target.dispose(), [offscreen]);
-  useEffect(() => {
-    offscreen.target.setSize(Math.max(64, Math.round(size.width / 3)), Math.max(64, Math.round(size.height / 3)));
-  }, [size.width, size.height, offscreen]);
-
-  const frameNo = useRef(0);
-  const Z = -14;
-  useFrame(({ pointer, clock }, dt) => {
-    const m = ref.current;
-    if (!m) return;
-    // 平面始终铺满镜头视野（镜头会前后移动）
-    const dist = camera.position.z - Z;
-    const h = 2 * dist * Math.tan((camera.fov * Math.PI) / 360) * 1.08;
-    m.scale.set(h * viewport.aspect, h, 1);
-    m.position.set(camera.position.x, camera.position.y, Z);
-    shared.uAspect.value.set(viewport.aspect, 1);
-    if (!reduced) shared.uTime.value = clock.elapsedTime;
-    shared.uPointer.value.lerp(pointer, 1 - Math.exp(-dt * 2));
-    const phase = useTarotStore.getState().phase;
-    const energy = phase === 'done' ? 1 : phase === 'selecting' ? 0.5 : 0.2;
-    shared.uEnergy.value += (energy - shared.uEnergy.value) * (1 - Math.exp(-dt));
-    // 星云变化很慢：隔帧重画一次就够了
-    if (frameNo.current++ % 2 === 0) {
-      const prev = gl.getRenderTarget();
-      gl.setRenderTarget(offscreen.target);
-      gl.render(offscreen.scene, offscreen.camera);
-      gl.setRenderTarget(prev);
-    }
-  });
-
-  return (
-    <mesh ref={ref} renderOrder={-10} frustumCulled={false}>
-      <planeGeometry args={[1, 1]} />
-      <shaderMaterial vertexShader={nebulaVertex} fragmentShader={skyFragment} uniforms={skyUniforms} depthWrite={false} toneMapped={false} />
-    </mesh>
-  );
-}
-
 const sigilFragment = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
@@ -215,54 +76,50 @@ const sigilFragment = /* glsl */ `
   }
 `;
 
-export function AstralSigil({ position = [0, -1.5, -1.6], size = 7.4 }) {
+const tmp = new THREE.Vector3();
+
+export function AstralSigil({ position = [0, 0.1, -2.3], size = 6.6 }) {
   const uniforms = useMemo(() => ({ uTime: { value: 0 }, uGlow: { value: 0 } }), []);
   const reduced = useMemo(() => prefersReduced(), []);
   const ref = useRef();
 
-  const TILT = 0.35;
-  useFrame(({ clock, camera }, dt) => {
-    if (!reduced) uniforms.uTime.value = clock.elapsedTime;
-    const phase = useTarotStore.getState().phase;
-    // 让整个法阵始终完整地落在画面里：算出它所在深度的可视范围，
-    // 先把圆心往上挪（最多挪到画面中央），还放不下就缩小
+  useFrame(({ clock }, dt) => {
+    const t = clock.elapsedTime;
+    if (!reduced) uniforms.uTime.value = t;
+    const s = useTarotStore.getState();
+    const open = s.deckOpen && (s.phase === 'selecting' || s.phase === 'revealing' || s.phase === 'done');
+    // 点开牌组：约 0.4 秒后被点燃，冲到最亮再落回常亮
+    const since = Date.now() - s.deckOpenedAt;
+    const ignite = open && since < 2600 ? Math.exp(-Math.pow((since - 900) / 520, 2)) * 0.9 : 0;
+    const target = !open ? 0 : (s.phase === 'done' ? 0.78 : 0.5) + ignite;
+    uniforms.uGlow.value += (target - uniforms.uGlow.value) * (1 - Math.exp(-dt * (open ? 2.2 : 1.4)));
     const m = ref.current;
-    if (m) {
-      const tanHalf = Math.tan((camera.fov * Math.PI) / 360);
-      const dist = camera.position.z - position[2];
-      const halfH = dist * tanHalf;
-      const halfW = halfH * camera.aspect;
-      const margin = 0.86; // 法阵后倾，下半部离镜头更近、透视上更大：多留一点边
-      const squash = Math.cos(TILT); // 法阵向后倾，竖直方向会被压扁一点
-      const top = camera.position.y + halfH;
-      // 手机上解读面板是底部抽屉（盖住下面约 55%）：法阵只放在它上方露出来的部分
-      const sheet = useTarotStore.getState().panelDocked && camera.aspect < 0.9;
-      const bottom = sheet ? top - halfH * 0.9 : camera.position.y - halfH;
-      const mid = (top + bottom) / 2;
-      let r = size / 2;
-      r = Math.min(r, (halfW - Math.abs(position[0] - camera.position.x)) * margin);
-      r = Math.min(r, ((top - bottom) / 2) * margin / squash);
-      const cy = Math.min(Math.max(position[1], bottom + (r * squash) / margin), mid);
-      const k = 1 - Math.exp(-dt * 6);
-      m.scale.setScalar(m.scale.x + (r * 2 - m.scale.x) * k);
-      m.position.y += (cy - m.position.y) * k;
+    if (!m) return;
+    m.visible = uniforms.uGlow.value > 0.01;
+    // 漂浮：上下轻轻起伏，盘面缓缓摆动（能看出它是悬在空中的一个圆盘，而不是贴在墙上）
+    if (!reduced) {
+      m.position.y = position[1] + Math.sin(t * 0.6) * 0.06;
+      m.rotation.set(Math.sin(t * 0.31) * 0.09, Math.sin(t * 0.23 + 1) * 0.13, 0);
     }
-    const target = phase === 'done' ? 1 : phase === 'selecting' || phase === 'revealing' ? 0.45 : 0;
-    uniforms.uGlow.value += (target - uniforms.uGlow.value) * (1 - Math.exp(-dt * 1.2));
-    if (ref.current) ref.current.visible = uniforms.uGlow.value > 0.02 || phase !== 'splash';
+    m.scale.setScalar(size * (0.92 + 0.08 * Math.min(1, uniforms.uGlow.value)));
+    const l = sceneLights[0];
+    m.getWorldPosition(tmp);
+    l.pos.copy(tmp);
+    l.strength = Math.max(l.strength, uniforms.uGlow.value * 1.5);
   });
 
   return (
-    <mesh ref={ref} position={position} scale={size} rotation={[-TILT, 0, 0]} renderOrder={-5}>
+    <mesh ref={ref} position={position} scale={size} renderOrder={-5}>
       <planeGeometry args={[1, 1]} />
       <shaderMaterial
-        vertexShader={nebulaVertex}
+        vertexShader={planeVertex}
         fragmentShader={sigilFragment}
         uniforms={uniforms}
         transparent
         depthWrite={false}
         blending={THREE.AdditiveBlending}
         toneMapped={false}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );

@@ -5,14 +5,15 @@ import { WebGLPathTracer, PhysicalCamera } from 'three-gpu-pathtracer';
 import { useTarotStore } from '../../../store/useTarotStore';
 import { TAROT_DECK } from '../../../data/tarotDeck';
 import { SLOT_SPACING, SLOT_Y } from '../CardArray';
-import { TABLE_POSE, getTableCanvases, tableGeometry, tableTextures } from './altarShape';
+import { cardRoot } from '../room/roomKit';
 import { FACE_OFFSET, backTexture, cardBodyGeometry, cardFaceGeometry, faceTexture, foilTexture } from '../cardKit';
 
 /**
  * 光追（客户端版）：五张牌翻开、动画结束后，用 GPU 路径追踪把牌阵重新渲染一遍。
  *
- *   · 另建一个只含"实体"的场景：同样的牌身、牌面贴图、描金边，脚下一块黑曜石镜面台，
- *     两盏柔光面光源 + 一张程序生成的环境贴图（暖色柔光箱 + 冷色轮廓光）
+ *   · 另建一个只含"实体"的场景：同样的牌身、牌面贴图、描金边，与实时画面里的牌阵同一个根节点变换；
+ *     两盏柔光面光源 + 一张程序生成的环境贴图（占卜室的暖色烛光 + 窗外冷色月光）
+ *   · 桌面、倒影由实时画面的占卜室（照片重构 + 平面反射）提供，光追只负责牌本身
  *   · 每帧追一批光线、逐帧累积：反射、柔和阴影、金边的互相映照、镜面台上的倒影都是真的光线算出来的
  *   · 背景透明，星云、星盘、流光仍由实时渲染画在下面；光追结果从 0 渐变盖上去
  *   · 镜头一动（解读面板停靠、窗口改变大小）就重新累积；累积够了停下，不再占显卡
@@ -103,6 +104,11 @@ async function buildScene(cards) {
   const edgeMat = new THREE.MeshPhysicalMaterial({ color: '#d9b36a', metalness: 1, roughness: 0.22 });
   const bodyParts = splitGroups(cardBodyGeometry());
   const faceGeo = solid(cardFaceGeometry());
+  // 与实时画面里的牌阵同一个变换（窄屏缩放、面板让位）
+  const root = new THREE.Group();
+  if (cardRoot.current) root.matrix.copy(cardRoot.current.matrixWorld);
+  root.matrixAutoUpdate = false;
+  scene.add(root);
 
   cards.forEach((card, i) => {
     const group = new THREE.Group();
@@ -115,35 +121,18 @@ async function buildScene(cards) {
     face.position.z = -FACE_OFFSET;
     face.rotation.y = Math.PI;
     group.add(face);
-    scene.add(group);
+    root.add(group);
   });
-
-  // 占卜桌：漆面樱桃木 + 黄铜镶嵌。木纹、清漆高光、铜丝反光、牌的倒影都由光线追出来
-  const tex = tableTextures(await getTableCanvases());
-  const top = new THREE.MeshPhysicalMaterial({ ...tex.top, metalness: 1, roughness: 1, normalScale: new THREE.Vector2(0.6, 0.6), clearcoat: 1, clearcoatRoughness: 0.035 });
-  const side = new THREE.MeshPhysicalMaterial({ ...tex.side, color: '#c4a8a4', roughness: 0.9, clearcoat: 1, clearcoatRoughness: 0.06 });
-  for (const part of splitGroups(tableGeometry())) {
-    const mesh = new THREE.Mesh(part.geometry, part.materialIndex === 0 ? top : side);
-    mesh.position.set(...TABLE_POSE.position);
-    mesh.rotation.set(...TABLE_POSE.rotation);
-    scene.add(mesh);
-  }
-
-  // 桌子正上方的暖色吊灯（与实时画面里的聚光灯同位置）
-  const lamp = new THREE.RectAreaLight('#ffd9a8', 3.2, 4.4, 2.4); // 大而柔：小而亮的灯在清漆反射里会变成噪点
-  lamp.position.set(0, TABLE_POSE.position[1] + 7.5, TABLE_POSE.position[2] + 2.2);
-  lamp.lookAt(0, TABLE_POSE.position[1], TABLE_POSE.position[2]);
-  scene.add(lamp);
 
   // 面光源：左上暖色主光、右下冷紫轮廓光
   const key = new THREE.RectAreaLight('#ffe2b0', 14, 3.2, 1.6);
   key.position.set(-3.5, SLOT_Y + 4, 4.5);
   key.lookAt(0, SLOT_Y, 0);
-  scene.add(key);
+  root.add(key);
   const fill = new THREE.RectAreaLight('#d6ccef', 5, 1.2, 4);
   fill.position.set(5, SLOT_Y + 0.5, 2.5);
   fill.lookAt(0, SLOT_Y, 0);
-  scene.add(fill);
+  root.add(fill);
 
   scene.environment = makeEnvironment();
   scene.environmentIntensity = 0.9;
@@ -285,6 +274,15 @@ export default function RayTrace() {
       return;
     }
     // 镜头动了（面板停靠、窗口改变）：同步镜头并重新累积
+    // 牌阵根节点变了（面板停靠让位）：光追场景里的牌也要跟过去
+    const rootNow = cardRoot.current?.matrixWorld;
+    const rootGroup = s.scene?.children[0];
+    if (rootNow && rootGroup && moved(rootGroup.matrix, rootNow)) {
+      rootGroup.matrix.copy(rootNow);
+      rootGroup.updateMatrixWorld(true);
+      s.tracer.setScene(s.scene, s.cam);
+      s.tracer.reset();
+    }
     if (moved(s.lastMatrix, camera.matrixWorld) || s.cam.aspect !== camera.aspect) {
       syncCamera(s.cam, camera);
       s.lastMatrix.copy(camera.matrixWorld);
