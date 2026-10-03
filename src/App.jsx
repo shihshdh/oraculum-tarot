@@ -18,6 +18,7 @@ import { useLiquidInteractions } from './lib/liquid';
 import { DESKTOP } from './lib/edition';
 import RayTraceBadge from './components/ui/RayTraceBadge';
 import InspectPanel from './components/ui/InspectPanel';
+import LastReading from './components/ui/LastReading';
 
 // three.js 那一大块等开场碎片落定后才下载、解析
 const TarotCanvas = lazy(() => import('./components/scene/TarotCanvas'));
@@ -51,6 +52,7 @@ export default function App() {
       <CardInfoOverlay />
       <SelectionHint />
       <SplashScreen />
+      <LastReading />
       <QuestionScreen />
       <ReadingPanel />
       <TopBar />

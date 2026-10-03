@@ -20,6 +20,13 @@
 - 主进程 `desktop/main.cjs`：`oraculum://app/` 提供页面，`/api/*` 转发到 Netlify 镜像；强制独显；F11 全屏、F5 刷新、F12 开发者工具
 - 调试：`npm run desktop:dev`（不安装，直接用 Electron 跑）
 
+## v4.5 · 上一次的牌
+
+- 开场左下角的牌袋（`components/ui/LastReading.jsx`）：Pixel Reconstruction 首页「走过的地方」文件夹的同一套结构——外层 `.card` 是感应区、只随牌袋展开到扇形位置，里层 `.face` 才在悬停时抬起，鼠标停在牌上不会来回抖；开合由脚本判断，离开整个舞台 180ms 后才收起，展开后舞台整块接住指针。每张牌的展开位置只由序号 k（−2…2）算出、写进 CSS 变量
+- 按占卜室的动效规矩改过：展开用自然减速 `--ease`、不回弹（Pixel 那只是回弹的），时长 `--d-hero`，按离中心的远近错开 60ms；手势光标悬停（`data-gesture-hover`）用 `:has()` 同样能展开，捏合即点击
+- 背后的 memoria 用系统手写体（Segoe Script / Snell Roundhand），第一次出现时一道向右倾斜的柔边遮罩从左扫到右；减少动态效果时直接显示
+- 点牌或牌袋 → `openHistoryAt(id)`，占卜史打开时选中那一次；左下角的摄像头提示在时牌袋先不出来（`cameraNoticeShown`）；手机、副屏、没有记录时不显示
+
 ## v4.4 · 占卜室
 
 - **场景**：首页和整个占卜过程都在一间 3D 占卜室里。一张照片 → Depth Anything V2 Large 逐像素深度 → 按照片里牌组的透视（五个特征点，误差 < 1 像素）反解出镜头俯角 9.1°、离桌面高度，按桌面平面标定深度尺度（远处另接一段，后墙约 60 单位）。资源由 `scripts/build-room.py` 生成：`public/textures/room/`（照片大/小图、16 位反深度图）和 `src/data/room.json`（标定参数）。照片里原来的牌组已经抹掉（从旁边搬木纹、羽化融合），由 3D 牌组（`scene/room/Deck.jsx`）顶替在同一位置

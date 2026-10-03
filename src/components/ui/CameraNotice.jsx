@@ -20,6 +20,9 @@ export default function CameraNotice() {
     const t = setTimeout(() => setDismissed(true), 12000);
     return () => clearTimeout(t);
   }, [text]);
+  // 提示和开场的牌袋都在左下角：提示在的时候牌袋先让开
+  const shown = !!text && !dismissed;
+  useEffect(() => { useTarotStore.setState({ cameraNoticeShown: shown }); }, [shown]);
 
   return (
     <AnimatePresence>

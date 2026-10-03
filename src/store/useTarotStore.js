@@ -90,6 +90,10 @@ export const useTarotStore = create(
 
       riverAccelerate: false,
       historyOpen: false,
+      // 打开占卜史时要选中的那一条（开场的牌袋点进来时用）
+      historyFocusId: null,
+      // 左下角的摄像头提示是否正显示着（开场的牌袋据此让位）
+      cameraNoticeShown: false,
       // 解读面板是否停靠在右侧（收起成胶囊时为 false）：3D 镜头和牌名据此让位
       panelDocked: false,
       // 开场动画是否结束（副屏、?nointro、减少动态效果时很快就是 true）
@@ -110,6 +114,7 @@ export const useTarotStore = create(
       setIsAdmin: (isAdmin) => set({ isAdmin }),
       setCameraState: (cameraState) => set({ cameraState }),
       setHistoryOpen: (historyOpen) => set({ historyOpen }),
+      openHistoryAt: (historyFocusId) => set({ historyOpen: true, historyFocusId }),
       setPanelDocked: (panelDocked) => set({ panelDocked }),
       setIntroDone: (introDone) => set({ introDone }),
       setRayTrace: (rayTrace) => set({ rayTrace }),

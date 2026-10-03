@@ -20,8 +20,12 @@ export default function HistoryPanel() {
     if (!open) return;
     const list = loadHistory();
     setEntries(list);
-    setSelectedId((id) => (list.some((e) => e.id === id) ? id : list[0]?.id || null));
-    setNarrowDetail(false);
+    // 从开场的牌袋点进来：直接选中那一次（窄屏上直接进详情）
+    const focus = useTarotStore.getState().historyFocusId;
+    const focused = focus && list.some((e) => e.id === focus);
+    setSelectedId((id) => (focused ? focus : list.some((e) => e.id === id) ? id : list[0]?.id || null));
+    setNarrowDetail(!!focused);
+    if (focus) useTarotStore.setState({ historyFocusId: null });
   }, [open]);
 
   const selected = entries.find((e) => e.id === selectedId);

@@ -1,0 +1,81 @@
+/* 牌袋舞台：固定在开场左下角，盖住整个扇形展开的范围；只有牌袋本身接收指针 */
+.stage {
+  position: fixed; left: clamp(28px, 3.4vw, 52px); bottom: max(22px, env(safe-area-inset-bottom)); z-index: 40;
+  width: 300px; height: 270px; display: grid; place-items: end center; pointer-events: none;
+}
+.stage > * { pointer-events: auto; }
+/* 展开后整块舞台都接住指针：在扇开的牌之间移动不会让牌袋收起 */
+.stage[data-open] { pointer-events: auto; }
+.script { pointer-events: none !important; }
+
+/* 背后的手写 memoria：金色、带一点烛光晕；一道向右倾斜、带柔边的遮罩从左扫到右，像笔尖顺着写过去 */
+.script {
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-7deg);
+  font: 400 76px/1 'Segoe Script', 'Snell Roundhand', 'Brush Script MT', cursive; letter-spacing: -.01em; white-space: nowrap; user-select: none;
+  color: rgba(233, 203, 139, .5); text-shadow: 0 0 18px rgba(233, 203, 139, .28), 0 0 2px rgba(255, 240, 205, .25);
+  -webkit-mask-image: linear-gradient(104deg, #000 42%, transparent 58%); mask-image: linear-gradient(104deg, #000 42%, transparent 58%);
+  -webkit-mask-size: 320% 100%; mask-size: 320% 100%; -webkit-mask-position: 100% 0; mask-position: 100% 0; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.script[data-written] { animation: write 3.6s cubic-bezier(.42, 0, .38, 1) forwards; }
+@keyframes write { from { -webkit-mask-position: 100% 0; mask-position: 100% 0; } to { -webkit-mask-position: 0 0; mask-position: 0 0; } }
+
+.pouch { position: relative; width: 236px; height: 132px; }
+/* 后片：黑丝绒，左上角一只耳朵，烫着小小的标志 */
+.back {
+  position: absolute; inset: 0; border-radius: 18px; color: var(--gold);
+  background: linear-gradient(170deg, #241b2b, #160f1b 55%, #0d0910);
+  box-shadow: 0 24px 46px -24px #000, inset 0 1px 0 rgba(255, 246, 225, .14), inset 0 0 0 1px rgba(233, 203, 139, .14);
+}
+.back::before { content: ""; position: absolute; left: 14px; top: -11px; width: 84px; height: 28px; border-radius: 11px 11px 0 0; background: #211827; box-shadow: inset 0 1px 0 rgba(255, 246, 225, .12); }
+.back > svg { position: absolute; left: 22px; top: -6px; opacity: .8; }
+
+/* 牌：底边中点为旋转轴。静止时只露出顶边，展开后按牌阵顺序向上扇开（自然减速，不回弹） */
+.card {
+  position: absolute; left: calc(50% - 34px); bottom: 22px; width: 68px; height: 118px; padding: 0; border: 0; background: none; cursor: pointer;
+  transform-origin: 50% 100%; transform: translate3d(var(--rest-x), 0, 0) rotate(var(--rest-r));
+  transition: transform var(--d-hero) var(--ease) var(--delay);
+}
+.face {
+  position: absolute; inset: 0; border-radius: 6px; overflow: hidden; background: #1a1424; transform-origin: 50% 100%;
+  box-shadow: 0 10px 20px -12px #000, inset 0 0 0 1px rgba(233, 203, 139, .45);
+  transition: transform var(--d-layout) var(--ease), box-shadow var(--d-layout) var(--ease);
+}
+.face img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.face::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1.5px rgba(233, 203, 139, .7); pointer-events: none; }
+/* 位置：指到哪张写出哪张 */
+.tag {
+  position: absolute; left: 50%; top: -26px; transform: translate(-50%, 6px); padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  font-family: var(--serif); font-size: 11px; letter-spacing: .16em; color: #fff6df; background: rgba(20, 15, 26, .82);
+  box-shadow: inset 0 0 0 1px rgba(233, 203, 139, .35); opacity: 0; pointer-events: none;
+  transition: opacity var(--d-state) var(--ease), transform var(--d-layout) var(--ease);
+}
+.stage[data-open] .card,
+.stage:has([data-gesture-hover]) .card { transform: translate3d(var(--open-x), var(--open-y), 0) rotate(var(--open-r)) scale(1.08); }
+.card:hover, .card:focus-visible, .card[data-gesture-hover] { z-index: 20 !important; }
+.card:hover .face, .card:focus-visible .face, .card[data-gesture-hover] .face { transform: translate3d(0, -22px, 0) scale(1.06); box-shadow: 0 22px 34px -14px #000, 0 0 26px rgba(233, 203, 139, .28), inset 0 0 0 1px rgba(233, 203, 139, .45); }
+.card:hover .tag, .card:focus-visible .tag, .card[data-gesture-hover] .tag { opacity: 1; transform: translate(-50%, -22px); }
+
+/* 前袋：深色磨砂玻璃，牌的下半截在后面若隐若现 */
+.pocket {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 86px; z-index: 30; padding: 0 16px; border: 0; border-radius: 18px; cursor: pointer; text-align: left; color: var(--ink);
+  display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  background: linear-gradient(160deg, rgba(255, 246, 225, .12), rgba(40, 30, 50, .5) 55%, rgba(14, 10, 18, .72));
+  -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
+  box-shadow: inset 0 1px 0 rgba(255, 249, 232, .32), inset 0 -10px 22px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(233, 203, 139, .18), 0 16px 30px -18px #000;
+  transition: transform var(--d-state) var(--ease);
+}
+.pocket:active { transform: scale(.985); }
+.label { font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: .16em; }
+.note { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; letter-spacing: .06em; color: var(--ink3); }
+.arrow {
+  position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--gold); font-size: 14px; background: rgba(233, 203, 139, .1); box-shadow: inset 0 0 0 1px rgba(233, 203, 139, .35);
+  transition: transform var(--d-layout) var(--ease);
+}
+.stage[data-open] .arrow { transform: translateX(3px); }
+
+@media (max-height: 640px) { .stage { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .card, .face, .tag, .arrow { transition: none; }
+  .script, .script[data-written] { -webkit-mask-image: none; mask-image: none; animation: none; }
+}
